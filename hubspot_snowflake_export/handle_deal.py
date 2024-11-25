@@ -31,7 +31,7 @@ def handle_company_details(deal_id, sf_cursor):
         print(f"Upserted company {company_id} - {company_name}")
         return {"associations": deal_company_assc,
                 "company_details": {"id": company_id, "name": company_name, "domain": company_domain}}
-    return None
+    return {}
 
 
 def handle_deal_owner_details(deal_owner, sf_cursor):
@@ -57,7 +57,7 @@ def handle_deal_owner_details(deal_owner, sf_cursor):
         sf_cursor.execute(merge_sql)
         print(f"Upserted owner {owner_id} - {owner_name}")
         return owner_details
-    return None
+    return {}
 
 
 def parse_owner_details(owner_details):
@@ -76,7 +76,7 @@ def parse_owner_details(owner_details):
 
 def handle_deal_collaborators(deal_collaborators_str):
     if not deal_collaborators_str:
-        return None
+        return []
     collaborator_ids = deal_collaborators_str.split(";")
     collaborators = []
     for collaborator_id in collaborator_ids:
@@ -318,11 +318,11 @@ def handle_deal(deal, sf_cursor):
 
         stage_details = get_deal_pipeline_stages(pipeline_id)
         deals_request = create_deal_update_request(owner_details, collaborators_details,
-                                                   company_associations['associations'])
+                                                   company_associations.get('associations', None))
 
         special_fields_updated_on = handle_special_fields(deal_id, deal_properties, sf_cursor)
         upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details,
-                    company_associations['company_details'],
+                    company_associations.get('company_details', None),
                     stage_details,special_fields_updated_on)
     except Exception as ex:
         traceback.print_exc()
