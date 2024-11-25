@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+ Sample SAM Template for hubspot_deals_export
+
+Resources:
+  HubspotDealsExportToSnowflake:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'hubspot-snowflake-export'
+      Handler: hubspot_snowflake_export.handler.lambda_handler
+      Runtime: python3.12
+      Timeout: 900
+      MemorySize: 1024
+      Architectures:
+        - x86_64
+
+  HubspotDealsExportScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: 'rate(5 minutes)'
+      State: 'ENABLED'
+      Name: 'HubspotDealsExportScheduleRule'
+      Targets:
+        - Arn: !GetAtt HubspotDealsExportToSnowflake.Arn
+          Id: "ScheduleJobForHubspotDealsExport"
+          Input: '{"event": "SCHEDULE_FETCH"}'
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref HubspotDealsExportToSnowflake
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt HubspotDealsExportScheduleRule.Arn
