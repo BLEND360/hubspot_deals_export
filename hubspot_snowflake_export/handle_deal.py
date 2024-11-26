@@ -3,10 +3,12 @@ import traceback
 from datetime import datetime, timezone, timedelta
 
 from .utils.config import SF_COMPANIES_TABLE, SF_DEAL_OWNERS_TABLE, SF_DEAL_COLLABORATORS_TABLE, SF_DEALS_TABLE
-from .utils.hubspot_api import get_deal, get_company_details, get_deal_to_company_association, get_owner_details, get_deal_pipeline_stages
+from .utils.hubspot_api import get_deal, get_company_details, get_deal_to_company_association, get_owner_details, \
+    get_deal_pipeline_stages
 
 curr_time = datetime.now(timezone.utc)
 formatted_datetime = curr_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+
 
 def handle_company_details(deal_id, sf_cursor):
     deal_company_assc = get_deal_to_company_association(deal_id)
@@ -137,14 +139,15 @@ def none_to_null(value):
     return "NULL" if value is None else f"'{value}'"
 
 
-def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details, company_details, stage_details,special_fields_updated_on):
+def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details, company_details, stage_details,
+                special_fields_updated_on):
     company_name = None if not company_details else company_details['name'] if company_details['name'] else " ".join(
         company_details['domain'].split(".")[:-1]).title() if company_details['domain'] else None
     stage_name = next((stage['label'] for stage in stage_details if stage['id'] == deal_properties['dealstage']), None)
 
     deal_data_raw = {
         "DEAL_ID": deal_id,
-        "DEAL_NAME": deal_properties['dealname'],
+        "DEAL_NAME": deal_properties['dealname'].replace("'", "''"),
         "DEAL_OWNER": deals_request['owner_json'],
         "DEAL_OWNER_ID": deal_properties['hubspot_owner_id'],
         "DEAL_OWNER_EMAIL": owner_details['email'] if owner_details is not None else None,
@@ -248,7 +251,7 @@ def to_int(value: str) -> int:
 def compare_dicts(dict1, dict2, fields):
     for field in fields:
         value1 = dict1.get(field, '')
-        value2 = dict2.get(field,'')
+        value2 = dict2.get(field, '')
         if field == 'DEAL_AMOUNT_IN_COMPANY_CURRENCY':
             if to_int(value1) != to_int(value2):
                 return False
@@ -293,8 +296,9 @@ def handle_special_fields(deal_id, updated_deal_properties, sf_cursor):
         'PROJECT_START_DATE': updated_deal_properties['expected_project_start_date'],
         'DURATION_IN_MONTHS': updated_deal_properties['expected_project_duration_in_months']
     }
-    fields_to_compare=['DEAL_STAGE_ID','DEAL_AMOUNT_IN_COMPANY_CURRENCY','ENGAGEMENT_TYPE','PROJECT_START_DATE','DURATION_IN_MONTHS']
-    if compare_dicts(result_dicts[0], updated_deal_fields,fields_to_compare):
+    fields_to_compare = ['DEAL_STAGE_ID', 'DEAL_AMOUNT_IN_COMPANY_CURRENCY', 'ENGAGEMENT_TYPE', 'PROJECT_START_DATE',
+                         'DURATION_IN_MONTHS']
+    if compare_dicts(result_dicts[0], updated_deal_fields, fields_to_compare):
         return result_dicts[0]['SPECIAL_FILEDS_UPDATED_ON']
     return formatted_datetime
 
@@ -323,7 +327,7 @@ def handle_deal(deal, sf_cursor):
         special_fields_updated_on = handle_special_fields(deal_id, deal_properties, sf_cursor)
         upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details,
                     company_associations.get('company_details', None),
-                    stage_details,special_fields_updated_on)
+                    stage_details, special_fields_updated_on)
     except Exception as ex:
         traceback.print_exc()
         print(f"Failed to updated deal - {deal['id']}, Exception: {ex}")
