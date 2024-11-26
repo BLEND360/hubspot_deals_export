@@ -82,25 +82,35 @@ deal_properties = [
     "engagement_type__cloned_"
 ]
 
-def fetch_updated_or_created_deals(start_date_time):
+
+def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z"):
     url = f"{BASE_URL}/crm/v3/objects/deals/search"
 
     deals = []
     has_more = True
     after = "0"
+    filters = [
+        {
+            "propertyName": "hs_lastmodifieddate",
+            "operator": "GT",
+            "value": start_date_time
+        }
+    ]
+    if not sync_older:
+        filters.append(
+            {
+                "propertyName": "createdate",
+                "operator": "GT",
+                "value": created_after
+            }
+        )
     while has_more:
         payload = json.dumps({
             "after": after,
             "limit": 100,
             "filterGroups": [
                 {
-                    "filters": [
-                        {
-                            "propertyName": "hs_lastmodifieddate",
-                            "operator": "GT",
-                            "value": start_date_time
-                        }
-                    ]
+                    "filters": filters
                 }
             ]
         })
@@ -126,7 +136,6 @@ def fetch_updated_or_created_deals(start_date_time):
 
 
 def get_updated_or_new_deals():
-
     start_date = datetime.now() - timedelta(minutes=5)
     start_date_str = start_date.isoformat()
 
@@ -203,7 +212,8 @@ def call_owner_api(owner_id, archive):
         owner_details = response.json()
         return owner_details
     else:
-        print(f"Error fetching owner details for {owner_id} with archive: {archive} : {response.status_code} - {response.text}")
+        print(
+            f"Error fetching owner details for {owner_id} with archive: {archive} : {response.status_code} - {response.text}")
         return None
 
 
@@ -235,4 +245,3 @@ def get_deal(deal_id):
     else:
         print(f"Error fetching deal details for id {deal_id}: {response.status_code} - {response.text}")
         return None
-
