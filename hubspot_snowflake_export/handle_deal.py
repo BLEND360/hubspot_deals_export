@@ -57,7 +57,7 @@ def handle_deal_owner_details(deal_owner, sf_cursor):
         sf_cursor.execute(merge_sql)
         print(f"Upserted owner {owner_id} - {owner_name}")
         return owner_details
-    return {}
+    return None
 
 
 def parse_owner_details(owner_details):
