@@ -245,3 +245,31 @@ def get_deal(deal_id):
     else:
         print(f"Error fetching deal details for id {deal_id}: {response.status_code} - {response.text}")
         return None
+
+def get_line_items_by_ids(line_item_ids):
+    if not line_item_ids or len(line_item_ids) < 1:
+        return None
+    url = f"{BASE_URL}/crm/v3/objects/line_items/batch/read"
+
+    inputs = [{"id": id} for id in line_item_ids]
+    payload = json.dumps({
+        "inputs":inputs,
+        "limit": 100,
+        "properties": [
+            "name",
+            "quantity",
+            "price",
+            "amount"
+        ]
+    })
+    headers = {
+        'authorization': f'Bearer {API_KEY}',
+        'Content-Type': 'application/json'
+    }
+    response = requests.post(url, headers=headers, data=payload)
+    if response.status_code in range(200, 300):
+        line_items = response.json()
+        return line_items['results']
+    else:
+        print(f"Error fetching line items: {response.status_code} - {response.text}")
+        return None

@@ -1,10 +1,11 @@
 import json
 import traceback
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
-from .utils.config import SF_COMPANIES_TABLE, SF_DEAL_OWNERS_TABLE, SF_DEAL_COLLABORATORS_TABLE, SF_DEALS_TABLE
+from .utils.config import SF_COMPANIES_TABLE, SF_DEAL_OWNERS_TABLE, SF_DEAL_COLLABORATORS_TABLE, SF_DEALS_TABLE, \
+    SF_LINE_ITEMS_TABLE
 from .utils.hubspot_api import get_deal, get_company_details, get_deal_to_company_association, get_owner_details, \
-    get_deal_pipeline_stages
+    get_deal_pipeline_stages, get_line_items_by_ids
 
 curr_time = datetime.now(timezone.utc)
 formatted_datetime = curr_time.strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -34,6 +35,38 @@ def handle_company_details(deal_id, sf_cursor):
         return {"associations": deal_company_assc,
                 "company_details": {"id": company_id, "name": company_name, "domain": company_domain}}
     return {}
+
+
+def handle_line_items(deal, sf_cursor):
+    try:
+        line_item_ids = [item["id"] for item in deal.get("associations", {}).get("line items", {}).get("results", [])]
+        if line_item_ids and len(line_item_ids)>0:
+            line_items_data = get_line_items_by_ids(line_item_ids)
+            values_str = ", ".join([f"('{item['id']}', '{item['properties']['name']}', {item['properties'].get('price', 0)}, {item['properties'].get('quantity', 0)}, {item['properties'].get('amount', 0)}, '{item['createdAt']}', '{item['updatedAt']}', '{deal['id']}')"
+                                    for item in line_items_data])
+            upsert_query = f"""
+            MERGE INTO {SF_LINE_ITEMS_TABLE} AS target
+            USING (
+                SELECT * FROM VALUES
+                {values_str}
+            ) AS source(LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID)
+            ON target.LINE_ITEM_ID = source.LINE_ITEM_ID and target.DEAL_ID = source.DEAL_ID
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.NAME = source.NAME,
+                    target.PRICE = source.PRICE,
+                    target.QUANTITY = source.QUANTITY,
+                    target.AMOUNT = source.AMOUNT,
+                    target.CREATED_ON = source.CREATED_ON,
+                    target.UPDATED_ON = source.UPDATED_ON
+            WHEN NOT MATCHED THEN
+                INSERT (LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID)
+                VALUES (source.LINE_ITEM_ID, source.NAME, source.PRICE, source.QUANTITY, source.AMOUNT, source.CREATED_ON, source.UPDATED_ON, source.DEAL_ID);
+            """
+            sf_cursor.execute(upsert_query)
+            print(f"Upserted line items")
+    except Exception as ex:
+        print(f"Failed to upsert line items for the deal - {deal['id']}")
 
 
 def handle_deal_owner_details(deal_owner, sf_cursor):
@@ -315,6 +348,7 @@ def handle_deal(deal, sf_cursor):
 
         print(f"Upserting Deal {deal_id} - {deal_properties['dealname']}")
 
+        handle_line_items(deal, sf_cursor)
         company_associations = handle_company_details(deal_id, sf_cursor)
         owner_details = handle_deal_owner_details(deal_owner, sf_cursor)
         collaborators_details = handle_deal_collaborators(deal_collaborators)
