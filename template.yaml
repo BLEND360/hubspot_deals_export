@@ -15,6 +15,17 @@ Resources:
       Architectures:
         - x86_64
 
+  HubspotDealsExportToSnowflakeProd:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'hubspot-snowflake-export-prod'
+      Handler: hubspot_snowflake_export.handler.lambda_handler
+      Runtime: python3.12
+      Timeout: 900
+      MemorySize: 1024
+      Architectures:
+        - x86_64
+
   HubspotDealsExportScheduleRule:
     Type: AWS::Events::Rule
     Properties:
@@ -26,6 +37,17 @@ Resources:
           Id: "ScheduleJobForHubspotDealsExport"
           Input: '{"event": "SCHEDULE_FETCH"}'
 
+  HubspotDealsExportProdScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: 'rate(5 minutes)'
+      State: 'ENABLED'
+      Name: 'HubspotDealsExportProdScheduleRule'
+      Targets:
+        - Arn: !GetAtt HubspotDealsExportToSnowflakeProd.Arn
+          Id: "ScheduleJobForHubspotDealsExportProd"
+          Input: '{"event": "SCHEDULE_FETCH"}'
+
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -33,3 +55,11 @@ Resources:
       FunctionName: !Ref HubspotDealsExportToSnowflake
       Principal: 'events.amazonaws.com'
       SourceArn: !GetAtt HubspotDealsExportScheduleRule.Arn
+
+  LambdaInvokePermissionProd:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref HubspotDealsExportToSnowflakeProd
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt HubspotDealsExportProdScheduleRule.Arn
