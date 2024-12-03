@@ -1,9 +1,35 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
- Sample SAM Template for hubspot_deals_export
+  Sample SAM Template for hubspot_deals_export
+
+
+Parameters:
+  Environment:
+    Description: Environment type.
+    Default: dev
+    Type: String
+    AllowedValues:
+      - prod
+      - dev
+  SecretName:
+    Default: blend_ode/dev
+    Type: String
+  SfDatabase:
+    Default: RESOURCE_REQUEST_TOOL
+    Type: String
+  SfRole:
+    Default: SNOWFLAKE_RESOURCE_REQUEST_ADMIN
+    Type: String
+  SfSchema:
+    Default: PRICING_TOOL_SANDBOX
+    Type: String
+  SfWarehouse:
+    Default: POWERHOUSE
+    Type: String
 
 Resources:
+  #Lambda Function#
   HubspotDealsExportToSnowflake:
     Type: AWS::Serverless::Function
     Properties:
@@ -14,18 +40,18 @@ Resources:
       MemorySize: 1024
       Architectures:
         - x86_64
+      Environment:
+        Variables:
+          HUBSPOT_API_KEY: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:HUBSPOT_TOKEN}}"
+          SF_ACCOUNT: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SF_ACCOUNT}}"
+          SF_DATABASE: !Ref SfDatabase
+          SF_PASSWORD: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SF_PASSWORD}}"
+          SF_ROLE: !Ref SfRole
+          SF_SCHEMA: !Ref SfSchema
+          SF_USER: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SF_USER}}"
+          SF_WAREHOUSE: !Ref SfWarehouse
 
-  HubspotDealsExportToSnowflakeProd:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: 'hubspot-snowflake-export-prod'
-      Handler: hubspot_snowflake_export.handler.lambda_handler
-      Runtime: python3.12
-      Timeout: 900
-      MemorySize: 1024
-      Architectures:
-        - x86_64
-
+  #Rule - to run cron job#
   HubspotDealsExportScheduleRule:
     Type: AWS::Events::Rule
     Properties:
@@ -37,17 +63,7 @@ Resources:
           Id: "ScheduleJobForHubspotDealsExport"
           Input: '{"event": "SCHEDULE_FETCH"}'
 
-  HubspotDealsExportProdScheduleRule:
-    Type: AWS::Events::Rule
-    Properties:
-      ScheduleExpression: 'rate(5 minutes)'
-      State: 'ENABLED'
-      Name: 'HubspotDealsExportProdScheduleRule'
-      Targets:
-        - Arn: !GetAtt HubspotDealsExportToSnowflakeProd.Arn
-          Id: "ScheduleJobForHubspotDealsExportProd"
-          Input: '{"event": "SCHEDULE_FETCH"}'
-
+  #Lambda Invoke Permission - to run cron job#
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -55,11 +71,3 @@ Resources:
       FunctionName: !Ref HubspotDealsExportToSnowflake
       Principal: 'events.amazonaws.com'
       SourceArn: !GetAtt HubspotDealsExportScheduleRule.Arn
-
-  LambdaInvokePermissionProd:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: 'lambda:InvokeFunction'
-      FunctionName: !Ref HubspotDealsExportToSnowflakeProd
-      Principal: 'events.amazonaws.com'
-      SourceArn: !GetAtt HubspotDealsExportProdScheduleRule.Arn

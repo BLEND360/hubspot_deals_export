@@ -16,8 +16,11 @@ def handle_company_details(deal_id, sf_cursor):
     if len(deal_company_assc) > 0:
         company_id = deal_company_assc[0]['toObjectId']
         company_details = get_company_details(company_id)
-        company_name = company_details['properties']['name'].replace("'", "''")
-        company_domain = company_details['properties']['domain']
+        if not company_details['properties']:
+            return {}
+        company_name = company_details['properties'].get('name', "")
+        company_name = company_name.replace("'", "''") if company_name else ""
+        company_domain = company_details['properties'].get('domain', "")
 
         merge_sql = f"""
                MERGE INTO {SF_COMPANIES_TABLE} AS target
