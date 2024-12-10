@@ -39,13 +39,15 @@ def handle_company_details(deal_id, sf_cursor):
                 "company_details": {"id": company_id, "name": company_name, "domain": company_domain}}
     return {}
 
+def none_to_null_(value):
+    return "NULL" if value is None or value == '' else value
 
 def handle_line_items(deal, sf_cursor):
     try:
         line_item_ids = [item["id"] for item in deal.get("associations", {}).get("line items", {}).get("results", [])]
         if line_item_ids and len(line_item_ids)>0:
             line_items_data = get_line_items_by_ids(line_item_ids)
-            values_str = ", ".join([f"('{item['id']}', '{item['properties']['name']}', {item['properties'].get('price', 0)}, {item['properties'].get('quantity', 0)}, {item['properties'].get('amount', 0)}, '{item['createdAt']}', '{item['updatedAt']}', '{deal['id']}')"
+            values_str = ", ".join([f"('{none_to_null_(item['id'])}', '{none_to_null_(item['properties']['name'])}', {none_to_null_(item['properties'].get('price', 0))}, {none_to_null_(item['properties'].get('quantity', 0))}, {none_to_null_(item['properties'].get('amount', 0))}, '{none_to_null_(item['createdAt'])}', '{none_to_null_(item['updatedAt'])}', '{none_to_null_(deal['id'])}')"
                                     for item in line_items_data])
             upsert_query = f"""
             MERGE INTO {SF_LINE_ITEMS_TABLE} AS target
@@ -69,6 +71,7 @@ def handle_line_items(deal, sf_cursor):
             sf_cursor.execute(upsert_query)
             print(f"Upserted line items")
     except Exception as ex:
+        traceback.print_exc()
         print(f"Failed to upsert line items for the deal - {deal['id']}")
 
 
@@ -172,7 +175,7 @@ def upsert_deal_collaborators(deal_id, collaborators_details, sf_cursor):
 
 
 def none_to_null(value):
-    return "NULL" if value is None else f"'{value}'"
+    return "NULL" if value is None or value == '' else f"'{value}'"
 
 
 def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details, company_details, stage_details,
