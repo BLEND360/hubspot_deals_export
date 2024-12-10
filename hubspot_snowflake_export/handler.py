@@ -1,5 +1,4 @@
 import traceback
-from datetime import datetime, timezone
 
 from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, schedule_fetch
 from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE, SF_SYNC_INFO_TABLE
@@ -11,9 +10,6 @@ def lambda_handler(event, context):
     print(f"Received Event: {event_job}")
     sf_conn = create_sf_connection(SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE)
     sf_cursor = sf_conn.cursor()
-
-    curr_time = datetime.now(timezone.utc)
-    formatted_datetime = curr_time.strftime('%Y-%m-%dT%H:%M:%SZ')
 
     try:
 
@@ -35,7 +31,7 @@ def lambda_handler(event, context):
         sync_update_sql = f"""
             MERGE INTO {SF_SYNC_INFO_TABLE} AS target
             USING (VALUES 
-                ('DEALS', '{formatted_datetime}', 'System', '{event_job.upper()}', 'SUCCESS', NULL)
+                ('DEALS', CURRENT_TIMESTAMP(), 'System', '{event_job.upper()}', 'SUCCESS', NULL)
             ) AS source (ENTITY_NAME, LAST_UPDATED_ON, UPDATED_BY, UPDATE_EVENT, LAST_SYNC_STATUS, LAST_FAILED_ON)
             ON target.ENTITY_NAME = source.ENTITY_NAME
             WHEN MATCHED THEN
@@ -56,7 +52,7 @@ def lambda_handler(event, context):
         sync_failed_sql = f"""
             MERGE INTO {SF_SYNC_INFO_TABLE} AS target
             USING (VALUES 
-                ('DEALS', '{formatted_datetime}', 'System', '{event_job.upper()}', 'FAILED', '{formatted_datetime}')
+                ('DEALS', CURRENT_TIMESTAMP(), 'System', '{event_job.upper()}', 'FAILED', CURRENT_TIMESTAMP())
             ) AS source (ENTITY_NAME, LAST_UPDATED_ON, UPDATED_BY, UPDATE_EVENT, LAST_SYNC_STATUS, LAST_FAILED_ON)
             ON target.ENTITY_NAME = source.ENTITY_NAME
             WHEN MATCHED THEN
