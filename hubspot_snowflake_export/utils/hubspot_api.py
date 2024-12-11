@@ -79,7 +79,8 @@ deal_properties = [
     "ns_project_id__finance_only_",
     "current_stage",
     "engagement_type",
-    "engagement_type__cloned_"
+    "engagement_type__cloned_",
+    "work_ahead"
 ]
 
 
