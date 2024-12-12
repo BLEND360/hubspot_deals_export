@@ -199,7 +199,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "PIPELINE_ID": deal_properties['pipeline'],
         "PROJECT_START_DATE": deal_properties['expected_project_start_date'],
         "PROJECT_CLOSE_DATE": deal_properties['closedate'],
-        "ENGAGEMENT_TYPE": deal_properties['engagement_type'] if deal_properties['engagement_type'] else deal_properties['engagement_type__cloned_'],
+        "ENGAGEMENT_TYPE": deal_properties['engagement_type__cloned_'] if deal_properties['engagement_type__cloned_'] else deal_properties['engagement_type'],
         "DURATION_IN_MONTHS": deal_properties['expected_project_duration_in_months'],
         "DEAL_COLLABORATORS": deals_request['collaborators_details_json'],
         "DEAL_CREATED_ON": deal_properties['createdate'],
