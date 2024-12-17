@@ -7,9 +7,6 @@ from .utils.config import SF_COMPANIES_TABLE, SF_DEAL_OWNERS_TABLE, SF_DEAL_COLL
 from .utils.hubspot_api import get_deal, get_company_details, get_deal_to_company_association, get_owner_details, \
     get_deal_pipeline_stages, get_line_items_by_ids
 
-curr_time = datetime.now(timezone.utc)
-formatted_datetime = curr_time.strftime('%Y-%m-%dT%H:%M:%SZ')
-
 
 def handle_company_details(deal_id, sf_cursor):
     deal_company_assc = get_deal_to_company_association(deal_id)
@@ -136,6 +133,8 @@ def create_deal_update_request(owner_details, collaborators_details, company_ass
 
 
 def upsert_deal_collaborators(deal_id, collaborators_details, sf_cursor):
+    curr_time = datetime.now(timezone.utc)
+    formatted_datetime = curr_time.strftime('%Y-%m-%dT%H:%M:%SZ')
     if collaborators_details and len(collaborators_details) > 0:
         values = ', '.join(
             f"('{col['email']}', {col['id']}, '{col['name']}', {col['is_archived']})" for col in collaborators_details
@@ -323,7 +322,7 @@ def handle_special_fields(deal_id, updated_deal_properties, sf_cursor):
     sf_cursor.execute(sql_query)
     results = sf_cursor.fetchall()
     if len(results) < 1:
-        return formatted_datetime
+        return updated_deal_properties['updatedAt']
     columns = [col[0] for col in sf_cursor.description]
     result_dicts = []
     for row in results:
@@ -342,7 +341,7 @@ def handle_special_fields(deal_id, updated_deal_properties, sf_cursor):
                          'DURATION_IN_MONTHS']
     if compare_dicts(result_dicts[0], updated_deal_fields, fields_to_compare):
         return result_dicts[0]['SPECIAL_FIELDS_UPDATED_ON']
-    return formatted_datetime
+    return updated_deal_properties['updatedAt']
 
 
 def handle_deal(deal, sf_cursor):
