@@ -36,12 +36,43 @@ def handle_company_details(deal_id, sf_cursor):
                 "company_details": {"id": company_id, "name": company_name, "domain": company_domain}}
     return {}
 
+
+def get_deleted_line_item_ids(updated_line_item_ids, existing_line_items):
+    existing_line_item_ids = [str(item[0]) for item in existing_line_items]
+    return list(set(existing_line_item_ids) - set(updated_line_item_ids))
+
+def to_float(value: str) -> float:
+    if not value:
+        return float(0)
+    try:
+        return float(value)
+    except Exception:
+        return float(0)
+
+def check_line_items_updation(existing_line_items, updated_line_items):
+    try:
+        for item in updated_line_items:
+            exst_item = next((d for d in existing_line_items if str(d[0]) == item['id']), None)
+            if exst_item:
+                if exst_item[1] != item['properties']['name'] or to_float(str(exst_item[2])) != to_float(str(item['properties'].get('amount', 0))):
+                    return True
+            else:
+                return True
+        return False
+    except Exception:
+        return False
+
+
 def none_to_null_(value):
     return "NULL" if value is None or value == '' else value
 
 def handle_line_items(deal, sf_cursor):
     try:
         line_item_ids = [item["id"] for item in deal.get("associations", {}).get("line items", {}).get("results", [])]
+
+        sf_cursor.execute(f""" SELECT LINE_ITEM_ID, NAME, AMOUNT FROM {SF_LINE_ITEMS_TABLE} WHERE DEAL_ID='{deal['id']}' """)
+        existing_line_items = sf_cursor.fetchall()
+
         if line_item_ids and len(line_item_ids)>0:
             line_items_data = get_line_items_by_ids(line_item_ids)
             values_str = ", ".join([f"('{none_to_null_(item['id'])}', '{none_to_null_(item['properties']['name'])}', {none_to_null_(item['properties'].get('price', 0))}, {none_to_null_(item['properties'].get('quantity', 0))}, {none_to_null_(item['properties'].get('amount', 0))}, '{none_to_null_(item['createdAt'])}', '{none_to_null_(item['updatedAt'])}', '{none_to_null_(deal['id'])}')"
@@ -67,9 +98,27 @@ def handle_line_items(deal, sf_cursor):
             """
             sf_cursor.execute(upsert_query)
             print(f"Upserted line items")
+
+            deleted_line_item_ids = get_deleted_line_item_ids(line_item_ids, existing_line_items)
+
+            if deleted_line_item_ids and len(deleted_line_item_ids) > 0:
+                id_str = ', '.join(map(str, deleted_line_item_ids))
+                print(f"""DELETING Line Items ({id_str})""")
+                sf_cursor.execute(f"""DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE LINE_ITEM_ID IN ({id_str})""")
+                return True
+
+            return check_line_items_updation(existing_line_items, line_items_data)
+        else:
+            if len(existing_line_items) > 0:
+                id_str = ', '.join(map(str, [item[0] for item in existing_line_items]))
+                print(f"""DELETING Line Items ({id_str})""")
+                sf_cursor.execute(f"""DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE LINE_ITEM_ID IN ({id_str})""")
+                return True
+            return False
     except Exception as ex:
         traceback.print_exc()
         print(f"Failed to upsert line items for the deal - {deal['id']}")
+        return False
 
 
 def handle_deal_owner_details(deal_owner, sf_cursor):
@@ -304,7 +353,9 @@ def compare_dicts(dict1, dict2, fields):
     return True
 
 
-def handle_special_fields(deal_id, updated_deal_properties, sf_cursor):
+def handle_special_fields(deal_id, updated_deal_properties, does_line_items_updated, sf_cursor):
+    if does_line_items_updated:
+        return updated_deal_properties['updatedAt']
     sql_query = f"""
     SELECT
         DEAL_ID,
@@ -356,7 +407,7 @@ def handle_deal(deal, sf_cursor):
 
         print(f"Upserting Deal {deal_id} - {deal_properties['dealname']}")
 
-        handle_line_items(deal, sf_cursor)
+        does_line_items_updated = handle_line_items(deal, sf_cursor)
         company_associations = handle_company_details(deal_id, sf_cursor)
         owner_details = handle_deal_owner_details(deal_owner, sf_cursor)
         collaborators_details = handle_deal_collaborators(deal_collaborators)
@@ -366,7 +417,7 @@ def handle_deal(deal, sf_cursor):
         deals_request = create_deal_update_request(owner_details, collaborators_details,
                                                    company_associations.get('associations', None))
 
-        special_fields_updated_on = handle_special_fields(deal_id, deal_properties, sf_cursor)
+        special_fields_updated_on = handle_special_fields(deal_id, deal_properties, does_line_items_updated, sf_cursor)
         upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details,
                     company_associations.get('company_details', None),
                     stage_details, special_fields_updated_on)
