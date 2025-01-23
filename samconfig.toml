@@ -1,0 +1,71 @@
+# More information about the configuration file can be found here:
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html
+version = 0.1
+
+#__________________DEV________________#
+[dev.global.parameters]
+stack_name = "hubspot_deals_export"
+
+[dev.build.parameters]
+cached = true
+parallel = true
+
+[dev.validate.parameters]
+lint = true
+
+[dev.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+stack_name = "hubspot-deals-export"
+s3_prefix = "hubspot-deals-export"
+region = "us-east-1"
+profile = "dev-admin"
+image_repositories = []
+
+[dev.package.parameters]
+resolve_s3 = true
+
+[dev.sync.parameters]
+watch = true
+
+[dev.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[dev.local_start_lambda.parameters]
+warm_containers = "EAGER"
+
+
+#__________________PROD________________#
+[prod.global.parameters]
+stack_name = "hubspot_deals_export"
+
+[prod.build.parameters]
+cached = true
+parallel = true
+
+[prod.validate.parameters]
+lint = true
+
+[prod.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+stack_name = "hubspot-deals-export"
+s3_prefix = "hubspot-deals-export"
+region = "us-east-1"
+profile = "prod-admin"
+image_repositories = []
+parameter_overrides= "Environment=prod SfSchema=PRICING_TOOL_PROD SecretName=pricing_app/prod"
+
+[prod.package.parameters]
+resolve_s3 = true
+
+[prod.sync.parameters]
+watch = true
+
+[prod.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[prod.local_start_lambda.parameters]
+warm_containers = "EAGER"
