@@ -1,7 +1,9 @@
 from datetime import datetime, timezone, timedelta
 
 from .handle_deal import handle_deal, handle_deal_upsert
+from .utils.config import SF_SYNC_INFO_TABLE
 from .utils.hubspot_api import fetch_updated_or_created_deals, get_deal
+from .utils.snowflake_db import close_sf_connection
 
 
 def schedule_fetch(sf_cursor):
@@ -59,6 +61,38 @@ def back_fill_deals(sf_cursor, event):
     else:
         print(f"No Deals Updated/Created Since: {sync_from}")
     return "success"
+
+
+def sync_all_deals(sf_cursor,sf_conn):
+    sync_from = "2024-01-01T01:01:01Z"
+
+    updated_deals_since = fetch_updated_or_created_deals(sync_from)
+    if len(updated_deals_since) > 0:
+        print(f"Deals Updated/Created Since: {sync_from} - {len(updated_deals_since)}")
+        for deal in updated_deals_since:
+            handle_deal_upsert(deal, sf_cursor)
+        print(f"Done - Deals Updated/Created Since: {sync_from}")
+        sync_update_sql = f"""
+            MERGE INTO {SF_SYNC_INFO_TABLE} AS target
+            USING (VALUES 
+                ('DEALS', CURRENT_TIMESTAMP(), 'System', 'SYNC_ALL_FROM_API', 'SUCCESS', NULL)
+            ) AS source (ENTITY_NAME, LAST_UPDATED_ON, UPDATED_BY, UPDATE_EVENT, LAST_SYNC_STATUS, LAST_FAILED_ON)
+            ON target.ENTITY_NAME = source.ENTITY_NAME
+            WHEN MATCHED THEN
+                UPDATE SET target.LAST_UPDATED_ON = source.LAST_UPDATED_ON, 
+                target.UPDATED_BY = source.UPDATED_BY,
+                target.UPDATE_EVENT = source.UPDATE_EVENT,
+                target.LAST_SYNC_STATUS = source.LAST_SYNC_STATUS
+            WHEN NOT MATCHED THEN
+                INSERT (ENTITY_NAME, LAST_UPDATED_ON, UPDATED_BY, UPDATE_EVENT, LAST_SYNC_STATUS, LAST_FAILED_ON)
+                VALUES (source.ENTITY_NAME, source.LAST_UPDATED_ON, source.UPDATED_BY, source.UPDATE_EVENT, source.LAST_SYNC_STATUS, source.LAST_FAILED_ON);
+            """
+        sf_cursor.execute(sync_update_sql)
+        close_sf_connection(sf_conn)
+    else:
+        print(f"No Deals Updated/Created Since: {sync_from}")
+    return "success"
+
 
 def bulk_deals_fetch(sf_cursor, event):
     deal_ids = event['deal_ids']

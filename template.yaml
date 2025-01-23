@@ -50,12 +50,25 @@ Resources:
           SF_SCHEMA: !Ref SfSchema
           SF_USER: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SF_USER}}"
           SF_WAREHOUSE: !Ref SfWarehouse
+      Events:
+        SingleDealUpdate:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SyncHubspotDealsAPI
+            Path: /sync/deal/{dealId}
+            Method: post
+        SyncAllDeal:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SyncHubspotDealsAPI
+            Path: /sync/deals
+            Method: post
 
   #Rule - to run cron job#
   HubspotDealsExportScheduleRule:
     Type: AWS::Events::Rule
     Properties:
-      ScheduleExpression: 'rate(5 minutes)'
+      ScheduleExpression: 'cron(0/30 10-3 ? * MON-FRI *)'
       State: 'ENABLED'
       Name: 'HubspotDealsExportScheduleRule'
       Targets:
@@ -71,3 +84,19 @@ Resources:
       FunctionName: !Ref HubspotDealsExportToSnowflake
       Principal: 'events.amazonaws.com'
       SourceArn: !GetAtt HubspotDealsExportScheduleRule.Arn
+
+
+  SyncHubspotDealsAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: SyncHubspotDealsAPI
+      StageName: !Ref Environment
+      EndpointConfiguration:
+        Type: REGIONAL
+
+  LambdaInvokePermissionForAPIGW:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref HubspotDealsExportToSnowflake
+      Principal: 'apigateway.amazonaws.com'
