@@ -4,7 +4,7 @@ import traceback
 
 from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, schedule_fetch
 from .handle_deal import handle_deal
-from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE, SF_SYNC_INFO_TABLE
+from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE, SF_SYNC_INFO_TABLE, API_AUTH_KEY
 from .utils.hubspot_api import get_deal
 from .utils.snowflake_db import create_sf_connection, close_sf_connection
 
@@ -14,6 +14,15 @@ def lambda_handler(event, context):
     sf_cursor = sf_conn.cursor()
 
     if 'httpMethod' in event:
+
+        headers = event.get('headers', {})
+        authorization_header = headers.get('Auth-Key')
+        if authorization_header != API_AUTH_KEY:
+            return {
+                "statusCode": 401,
+                "body": json.dumps({"message": f"Unauthorised"})
+            }
+
         path_params = event.get('pathParameters')
         if path_params and 'dealId' in path_params:
             try:

@@ -2,6 +2,8 @@ import json
 import traceback
 from datetime import datetime, timezone
 
+import pytz
+
 from .utils.config import SF_COMPANIES_TABLE, SF_DEAL_OWNERS_TABLE, SF_DEAL_COLLABORATORS_TABLE, SF_DEALS_TABLE, \
     SF_LINE_ITEMS_TABLE
 from .utils.hubspot_api import get_deal, get_company_details, get_deal_to_company_association, get_owner_details, \
@@ -232,7 +234,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         company_details['domain'].split(".")[:-1]).title() if company_details['domain'] else None
     stage_name = next((stage['label'] for stage in stage_details if stage['id'] == deal_properties['dealstage']), None)
 
-    curr_time = datetime.now()
+    curr_time = datetime.now(pytz.timezone('America/New_York'))
 
     deal_data_raw = {
         "DEAL_ID": deal_id,
