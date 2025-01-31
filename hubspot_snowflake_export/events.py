@@ -11,8 +11,8 @@ def schedule_fetch(sf_cursor):
     formatted_datetime = curr_time.strftime('%Y-%m-%dT%H:%M:%SZ')
     print(f"Checking Created/Updated Deals at {formatted_datetime}")
 
-    time_6_minutes_ago = curr_time - timedelta(minutes=6)
-    search_start_time = time_6_minutes_ago.strftime('%Y-%m-%dT%H:%M:%SZ')
+    time_31_minutes_ago = curr_time - timedelta(minutes=31)
+    search_start_time = time_31_minutes_ago.strftime('%Y-%m-%dT%H:%M:%SZ')
 
     deals = fetch_updated_or_created_deals(search_start_time)
 
