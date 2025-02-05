@@ -2,7 +2,7 @@ import json
 import boto3
 import traceback
 
-from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, schedule_fetch
+from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, schedule_fetch, handle_sync_status
 from .handle_deal import handle_deal
 from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE, SF_SYNC_INFO_TABLE, API_AUTH_KEY
 from .utils.hubspot_api import get_deal
@@ -44,6 +44,11 @@ def lambda_handler(event, context):
                 }
         else:
             print("[API] Invoking Async Function - To Sync all Deals")
+            if handle_sync_status(sf_cursor) == "PROCESSING":
+                return {
+                    "statusCode": 201,
+                    "body": json.dumps({"message": f"Already Sync In Progress"})
+                }
             lambda_client = boto3.client('lambda')
             lambda_client.invoke(
                 FunctionName="arn:aws:lambda:us-east-1:866336128083:function:hubspot-snowflake-export",
@@ -79,14 +84,15 @@ def lambda_handler(event, context):
         sync_update_sql = f"""
             MERGE INTO {SF_SYNC_INFO_TABLE} AS target
             USING (VALUES 
-                ('DEALS', CURRENT_TIMESTAMP(), 'System', '{event_job.upper()}', 'SUCCESS', NULL)
-            ) AS source (ENTITY_NAME, LAST_UPDATED_ON, UPDATED_BY, UPDATE_EVENT, LAST_SYNC_STATUS, LAST_FAILED_ON)
+                ('DEALS', CURRENT_TIMESTAMP(), 'System', '{event_job.upper()}', 'SUCCESS', NULL, 'COMPLETED')
+            ) AS source (ENTITY_NAME, LAST_UPDATED_ON, UPDATED_BY, UPDATE_EVENT, LAST_SYNC_STATUS, LAST_FAILED_ON, SYNC_STATUS)
             ON target.ENTITY_NAME = source.ENTITY_NAME
             WHEN MATCHED THEN
                 UPDATE SET target.LAST_UPDATED_ON = source.LAST_UPDATED_ON, 
                 target.UPDATED_BY = source.UPDATED_BY,
                 target.UPDATE_EVENT = source.UPDATE_EVENT,
-                target.LAST_SYNC_STATUS = source.LAST_SYNC_STATUS
+                target.LAST_SYNC_STATUS = source.LAST_SYNC_STATUS,
+                target.SYNC_STATUS = source.SYNC_STATUS
             WHEN NOT MATCHED THEN
                 INSERT (ENTITY_NAME, LAST_UPDATED_ON, UPDATED_BY, UPDATE_EVENT, LAST_SYNC_STATUS, LAST_FAILED_ON)
                 VALUES (source.ENTITY_NAME, source.LAST_UPDATED_ON, source.UPDATED_BY, source.UPDATE_EVENT, source.LAST_SYNC_STATUS, source.LAST_FAILED_ON);
@@ -100,15 +106,16 @@ def lambda_handler(event, context):
         sync_failed_sql = f"""
             MERGE INTO {SF_SYNC_INFO_TABLE} AS target
             USING (VALUES 
-                ('DEALS', CURRENT_TIMESTAMP(), 'System', '{event_job.upper()}', 'FAILED', CURRENT_TIMESTAMP())
-            ) AS source (ENTITY_NAME, LAST_UPDATED_ON, UPDATED_BY, UPDATE_EVENT, LAST_SYNC_STATUS, LAST_FAILED_ON)
+                ('DEALS', CURRENT_TIMESTAMP(), 'System', '{event_job.upper()}', 'FAILED', CURRENT_TIMESTAMP(), 'COMPLETED')
+            ) AS source (ENTITY_NAME, LAST_UPDATED_ON, UPDATED_BY, UPDATE_EVENT, LAST_SYNC_STATUS, LAST_FAILED_ON, SYNC_STATUS)
             ON target.ENTITY_NAME = source.ENTITY_NAME
             WHEN MATCHED THEN
                 UPDATE SET target.LAST_UPDATED_ON = source.LAST_UPDATED_ON, 
                 target.UPDATED_BY = source.UPDATED_BY,
                 target.UPDATE_EVENT = source.UPDATE_EVENT,
                 target.LAST_SYNC_STATUS = source.LAST_SYNC_STATUS,
-                target.LAST_FAILED_ON = source.LAST_FAILED_ON
+                target.LAST_FAILED_ON = source.LAST_FAILED_ON,
+                target.SYNC_STATUS = source.SYNC_STATUS
             WHEN NOT MATCHED THEN
                 INSERT (ENTITY_NAME, LAST_UPDATED_ON, UPDATED_BY, UPDATE_EVENT, LAST_SYNC_STATUS, LAST_FAILED_ON)
                 VALUES (source.ENTITY_NAME, source.LAST_UPDATED_ON, source.UPDATED_BY, source.UPDATE_EVENT, source.LAST_SYNC_STATUS, source.LAST_FAILED_ON);

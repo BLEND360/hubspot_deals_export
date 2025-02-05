@@ -236,6 +236,11 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
 
     curr_time = datetime.now(pytz.timezone('America/New_York'))
 
+    if deal_properties['work_ahead'] in ['No', 'blank']:
+        work_ahead = 'No'
+    else:
+        work_ahead = deal_properties['work_ahead']
+
     deal_data_raw = {
         "DEAL_ID": deal_id,
         "DEAL_NAME": deal_properties['dealname'].replace("'", "''"),
@@ -262,7 +267,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "DEAL_AMOUNT_IN_COMPANY_CURRENCY": deal_properties['amount_in_home_currency'],
         "DEAL_TYPE": deal_properties['dealtype'],
         "SPECIAL_FIELDS_UPDATED_ON": special_fields_updated_on,
-        "WORK_AHEAD": deal_properties['work_ahead'],
+        "WORK_AHEAD": work_ahead,
         "LAST_REFRESHED_ON": curr_time
     }
     deal_data = {key: none_to_null(value) for key, value in deal_data_raw.items()}

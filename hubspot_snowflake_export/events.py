@@ -106,3 +106,19 @@ def bulk_deals_fetch(sf_cursor, event):
         handle_deal(deal_details, sf_cursor)
 
     return "success"
+
+def handle_sync_status(sf_cursor):
+    get_sync_status_sql = f"""
+        SELECT SYNC_STATUS, SYNC_START_ON, LAST_UPDATED_ON FROM {SF_SYNC_INFO_TABLE} WHERE ENTITY_NAME='DEALS'
+    """
+    sf_cursor.execute(get_sync_status_sql)
+    sync_data = sf_cursor.fetchone()
+
+    if sync_data[0] == 'PROCESSING':
+        return 'PROCESSING'
+    else:
+        update_sync_status_sql = f"""
+            UPDATE {SF_SYNC_INFO_TABLE} SET SYNC_STATUS='PROCESSING', SYNC_START_ON=CURRENT_TIMESTAMP() WHERE ENTITY_NAME='DEALS'
+        """
+        sf_cursor.execute(update_sync_status_sql)
+        return "OK"
