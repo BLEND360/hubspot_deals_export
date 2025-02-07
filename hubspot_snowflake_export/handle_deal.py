@@ -256,7 +256,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "PIPELINE_ID": deal_properties['pipeline'],
         "PROJECT_START_DATE": deal_properties['expected_project_start_date'],
         "PROJECT_CLOSE_DATE": deal_properties['closedate'],
-        "ENGAGEMENT_TYPE": deal_properties['engagement_type__cloned_'] if deal_properties['engagement_type__cloned_'] else deal_properties['engagement_type'],
+        "ENGAGEMENT_TYPE": deal_properties['engagement_type__cloned_'],
         "DURATION_IN_MONTHS": deal_properties['expected_project_duration_in_months'],
         "DEAL_COLLABORATORS": deals_request['collaborators_details_json'],
         "DEAL_CREATED_ON": deal_properties['createdate'],
@@ -396,7 +396,7 @@ def handle_special_fields(deal_id, updated_deal_properties, does_line_items_upda
         'DEAL_ID': deal_id,
         'DEAL_STAGE_ID': updated_deal_properties['dealstage'],
         'DEAL_AMOUNT_IN_COMPANY_CURRENCY': updated_deal_properties['amount_in_home_currency'],
-        'ENGAGEMENT_TYPE': updated_deal_properties['engagement_type'],
+        'ENGAGEMENT_TYPE': updated_deal_properties['engagement_type__cloned_'],
         'PROJECT_START_DATE': updated_deal_properties['expected_project_start_date'],
         'DURATION_IN_MONTHS': updated_deal_properties['expected_project_duration_in_months']
     }
