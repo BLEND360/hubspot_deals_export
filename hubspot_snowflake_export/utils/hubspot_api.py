@@ -123,8 +123,10 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
         response = requests.request("POST", url, headers=headers, data=payload)
         if response.status_code == 200:
             data = response.json()
+            total_deals = data['total']
+            if total_deals > 200:
+                raise Exception('More than 200 Deals updated - Skipping.')
             deals.extend(data['results'])
-
             # Check if there is more data to fetch (pagination)
             has_more = 'paging' in data and 'next' in data['paging']
             after = data['paging']['next']['after'] if has_more else None

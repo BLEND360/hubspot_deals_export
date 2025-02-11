@@ -1,3 +1,4 @@
+import traceback
 from datetime import datetime, timezone, timedelta
 
 from .handle_deal import handle_deal, handle_deal_upsert
@@ -14,16 +15,20 @@ def schedule_fetch(sf_cursor):
     time_31_minutes_ago = curr_time - timedelta(minutes=31)
     search_start_time = time_31_minutes_ago.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    deals = fetch_updated_or_created_deals(search_start_time)
+    try:
+        deals = fetch_updated_or_created_deals(search_start_time)
 
-    if len(deals) > 0:
-        print(f"Found {len(deals)} - Created/Updated Deal(s)")
-        for deal in deals:
-            handle_deal_upsert(deal, sf_cursor)
-    else:
-        print("No Created/Updated Deals Found. Exiting.")
+        if len(deals) > 0:
+            print(f"Found {len(deals)} - Created/Updated Deal(s)")
+            for deal in deals:
+                handle_deal_upsert(deal, sf_cursor)
+        else:
+            print("No Created/Updated Deals Found. Exiting.")
+        return "success"
 
-    return "success"
+    except Exception as ex:
+        print(f"Failed Sync - {ex}")
+        return "failed"
 
 
 def single_deal_fetch(sf_cursor, event):
@@ -61,6 +66,31 @@ def back_fill_deals(sf_cursor, event):
     else:
         print(f"No Deals Updated/Created Since: {sync_from}")
     return "success"
+
+
+def sync_deals(sf_cursor, event):
+    sync_from = event.get('sync_from', None)
+
+    if not sync_from:
+        print("Missing sync_from in the request. Exiting.")
+        return
+
+    parsed_datetime = datetime.strptime(sync_from, "%Y-%m-%d %H:%M:%S.%f%z")
+    formatted_datetime = parsed_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    try:
+        updated_deals_since = fetch_updated_or_created_deals(formatted_datetime)
+        if len(updated_deals_since) > 0:
+            print(f"Deals Updated/Created Since: {sync_from} - {len(updated_deals_since)}")
+            for deal in updated_deals_since:
+                handle_deal_upsert(deal, sf_cursor)
+            print(f"Done - Deals Updated/Created Since: {sync_from}")
+        else:
+            print(f"No Deals Updated/Created Since: {sync_from}")
+        return "success"
+    except Exception as ex:
+        print(f"Failed Sync - {ex}")
+        return "failed"
 
 
 def sync_all_deals(sf_cursor,sf_conn):
@@ -107,6 +137,7 @@ def bulk_deals_fetch(sf_cursor, event):
 
     return "success"
 
+
 def handle_sync_status(sf_cursor):
     get_sync_status_sql = f"""
         SELECT SYNC_STATUS, SYNC_START_ON, LAST_UPDATED_ON FROM {SF_SYNC_INFO_TABLE} WHERE ENTITY_NAME='DEALS'
@@ -121,4 +152,4 @@ def handle_sync_status(sf_cursor):
             UPDATE {SF_SYNC_INFO_TABLE} SET SYNC_STATUS='PROCESSING', SYNC_START_ON=CURRENT_TIMESTAMP() WHERE ENTITY_NAME='DEALS'
         """
         sf_cursor.execute(update_sync_status_sql)
-        return "OK"
+        return sync_data[2]

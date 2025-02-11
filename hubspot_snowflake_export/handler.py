@@ -1,8 +1,12 @@
 import json
+from datetime import datetime, timedelta
+
 import boto3
 import traceback
 
-from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, schedule_fetch, handle_sync_status
+import pytz
+
+from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, sync_deals, schedule_fetch, handle_sync_status
 from .handle_deal import handle_deal
 from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE, SF_SYNC_INFO_TABLE, API_AUTH_KEY
 from .utils.hubspot_api import get_deal
@@ -43,23 +47,30 @@ def lambda_handler(event, context):
                     "body": json.dumps({"message": "Failed to Sync Deal"})
                 }
         else:
-            print("[API] Invoking Async Function - To Sync all Deals")
-            if handle_sync_status(sf_cursor) == "PROCESSING":
+            print("[API] Invoking Async Function - To Sync Deals")
+            last_status = handle_sync_status(sf_cursor)
+
+            if last_status == "PROCESSING":
                 return {
                     "statusCode": 201,
                     "body": json.dumps({"message": f"Already Sync In Progress"})
                 }
+
+            timestamp = datetime.fromisoformat(str(last_status))
+            utc_timestamp = timestamp.astimezone(pytz.UTC)
             lambda_client = boto3.client('lambda')
             lambda_client.invoke(
-                FunctionName="arn:aws:lambda:us-east-1:866336128083:function:hubspot-snowflake-export",
+                FunctionName="arn:aws:lambda:us-east-1:739817132544:function:hubspot-snowflake-export",
                 InvocationType="Event",
-                Payload=json.dumps({'event': 'BACK_FILL_FETCH', 'sync_from': '2024-01-01T01:01:01Z'})
+                Payload=json.dumps(
+                    {'event': 'MANUAL_SYNC', 'sync_from': str(utc_timestamp - timedelta(minutes=2))})
             )
+
+            print("Invoked Lambda with Event", {'event': 'MANUAL_SYNC', 'sync_from': str(utc_timestamp - timedelta(minutes=2))})
             return {
                 "statusCode": 202,
                 "body": json.dumps({"message": f"Accepted - Sync for all Deal"})
             }
-
 
     event_job = event['event']
     print(f"Received Event: {event_job}")
@@ -71,6 +82,9 @@ def lambda_handler(event, context):
 
         elif event_job == 'SINGLE_DEAL_UPDATE':
             single_deal_fetch(sf_cursor, event)
+
+        elif event_job == 'MANUAL_SYNC':
+            sync_deals(sf_cursor, event)
 
         elif event_job == 'BACK_FILL_FETCH':
             back_fill_deals(sf_cursor, event)
