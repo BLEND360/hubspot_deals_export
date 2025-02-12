@@ -371,7 +371,6 @@ def handle_special_fields(deal_id, updated_deal_properties, does_line_items_upda
     sql_query = f"""
     SELECT
         DEAL_ID,
-        DEAL_STAGE_ID,
         DEAL_AMOUNT_IN_COMPANY_CURRENCY,
         ENGAGEMENT_TYPE,
         PROJECT_START_DATE,
@@ -394,13 +393,12 @@ def handle_special_fields(deal_id, updated_deal_properties, does_line_items_upda
 
     updated_deal_fields = {
         'DEAL_ID': deal_id,
-        'DEAL_STAGE_ID': updated_deal_properties['dealstage'],
         'DEAL_AMOUNT_IN_COMPANY_CURRENCY': updated_deal_properties['amount_in_home_currency'],
         'ENGAGEMENT_TYPE': updated_deal_properties['engagement_type__cloned_'],
         'PROJECT_START_DATE': updated_deal_properties['expected_project_start_date'],
         'DURATION_IN_MONTHS': updated_deal_properties['expected_project_duration_in_months']
     }
-    fields_to_compare = ['DEAL_STAGE_ID', 'DEAL_AMOUNT_IN_COMPANY_CURRENCY', 'ENGAGEMENT_TYPE', 'PROJECT_START_DATE',
+    fields_to_compare = ['DEAL_AMOUNT_IN_COMPANY_CURRENCY', 'ENGAGEMENT_TYPE', 'PROJECT_START_DATE',
                          'DURATION_IN_MONTHS']
     if compare_dicts(result_dicts[0], updated_deal_fields, fields_to_compare):
         return result_dicts[0]['SPECIAL_FIELDS_UPDATED_ON']
