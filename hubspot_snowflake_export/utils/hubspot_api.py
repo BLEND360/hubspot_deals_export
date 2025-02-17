@@ -95,6 +95,11 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
             "propertyName": "hs_lastmodifieddate",
             "operator": "GT",
             "value": start_date_time
+        },
+        {
+            "propertyName": "pipeline",
+            "operator": "IN",
+            "values": ["74948272", "35923868", "663516528"]
         }
     ]
     if not sync_older:
