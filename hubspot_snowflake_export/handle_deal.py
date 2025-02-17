@@ -10,16 +10,14 @@ from .utils.hubspot_api import get_deal, get_company_details, get_deal_to_compan
     get_deal_pipeline_stages, get_line_items_by_ids
 
 
-def handle_company_details(deal_id, sf_cursor):
-    deal_company_assc = get_deal_to_company_association(deal_id)
-    if len(deal_company_assc) > 0:
-        company_id = deal_company_assc[0]['toObjectId']
-        company_details = get_company_details(company_id)
-        if not company_details['properties']:
-            return {}
-        company_name = company_details['properties'].get('name', "")
+def handle_company_details(deal_id, sf_cursor, deals_with_companies):
+    deal_company_assc = deals_with_companies.get(deal_id)
+    if deal_company_assc:
+        company_id = deal_company_assc["id"]
+
+        company_name = deal_company_assc.get('name', "")
         company_name = company_name.replace("'", "''") if company_name else ""
-        company_domain = company_details['properties'].get('domain', "")
+        company_domain = deal_company_assc.get('domain', "")
 
         merge_sql = f"""
                MERGE INTO {SF_COMPANIES_TABLE} AS target
@@ -43,6 +41,7 @@ def get_deleted_line_item_ids(updated_line_item_ids, existing_line_items):
     existing_line_item_ids = [str(item[0]) for item in existing_line_items]
     return list(set(existing_line_item_ids) - set(updated_line_item_ids))
 
+
 def to_float(value: str) -> float:
     if not value:
         return float(0)
@@ -51,12 +50,14 @@ def to_float(value: str) -> float:
     except Exception:
         return float(0)
 
+
 def check_line_items_updation(existing_line_items, updated_line_items):
     try:
         for item in updated_line_items:
             exst_item = next((d for d in existing_line_items if str(d[0]) == item['id']), None)
             if exst_item:
-                if exst_item[1] != item['properties']['name'] or to_float(str(exst_item[2])) != to_float(str(item['properties'].get('amount', 0))):
+                if exst_item[1] != item['properties']['name'] or to_float(str(exst_item[2])) != to_float(
+                        str(item['properties'].get('amount', 0))):
                     return True
             else:
                 return True
@@ -68,17 +69,20 @@ def check_line_items_updation(existing_line_items, updated_line_items):
 def none_to_null_(value):
     return "NULL" if value is None or value == '' else value
 
-def handle_line_items(deal, sf_cursor):
-    try:
-        line_item_ids = [item["id"] for item in deal.get("associations", {}).get("line items", {}).get("results", [])]
 
-        sf_cursor.execute(f""" SELECT LINE_ITEM_ID, NAME, AMOUNT FROM {SF_LINE_ITEMS_TABLE} WHERE DEAL_ID='{deal['id']}' """)
+def handle_line_items(deal, sf_cursor, deals_with_line_items):
+    try:
+        line_items_data = deals_with_line_items.get(deal['id'], [])
+        line_item_ids = [item["id"] for item in line_items_data]
+
+        sf_cursor.execute(
+            f""" SELECT LINE_ITEM_ID, NAME, AMOUNT FROM {SF_LINE_ITEMS_TABLE} WHERE DEAL_ID='{deal['id']}' """)
         existing_line_items = sf_cursor.fetchall()
 
-        if line_item_ids and len(line_item_ids)>0:
-            line_items_data = get_line_items_by_ids(line_item_ids)
-            values_str = ", ".join([f"('{none_to_null_(item['id'])}', '{none_to_null_(item['properties']['name'])}', {none_to_null_(item['properties'].get('price', 0))}, {none_to_null_(item['properties'].get('quantity', 0))}, {none_to_null_(item['properties'].get('amount', 0))}, '{none_to_null_(item['createdAt'])}', '{none_to_null_(item['updatedAt'])}', '{none_to_null_(deal['id'])}')"
-                                    for item in line_items_data])
+        if line_items_data:
+            values_str = ", ".join([
+                                       f"('{none_to_null_(item['id'])}', '{none_to_null_(item['name'])}', {none_to_null_(item.get('price', 0))}, {none_to_null_(item.get('quantity', 0))}, {none_to_null_(item.get('amount', 0))}, '{none_to_null_(item['created_at'])}', '{none_to_null_(item['updated_at'])}', '{none_to_null_(deal['id'])}')"
+                                       for item in line_items_data])
             upsert_query = f"""
             MERGE INTO {SF_LINE_ITEMS_TABLE} AS target
             USING (
@@ -123,14 +127,13 @@ def handle_line_items(deal, sf_cursor):
         return False
 
 
-def handle_deal_owner_details(deal_owner, sf_cursor):
+def handle_deal_owner_details(deal_owner, sf_cursor, owner_details):
     if deal_owner:
-        owner_details = get_owner_details(deal_owner)
-        owner_details = parse_owner_details(owner_details)
+        owner_details = owner_details.get(deal_owner, {})
         owner_email = owner_details['email']
         owner_name = owner_details['name']
         owner_id = owner_details['id']
-        is_archived = owner_details['is_archived']
+        is_archived = owner_details['archived']
 
         merge_sql = f"""
                MERGE INTO {SF_DEAL_OWNERS_TABLE} AS target
@@ -163,13 +166,13 @@ def parse_owner_details(owner_details):
     return None
 
 
-def handle_deal_collaborators(deal_collaborators_str):
+def handle_deal_collaborators(deal_collaborators_str, owner_details):
     if not deal_collaborators_str:
         return []
     collaborator_ids = deal_collaborators_str.split(";")
     collaborators = []
     for collaborator_id in collaborator_ids:
-        collaborator_details = parse_owner_details(get_owner_details(collaborator_id))
+        collaborator_details = owner_details.get(collaborator_id)
         if collaborator_details:
             collaborators.append(collaborator_details)
     return collaborators
@@ -228,11 +231,10 @@ def none_to_null(value):
     return "NULL" if value is None or value == '' else f"'{value}'"
 
 
-def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details, company_details, stage_details,
-                special_fields_updated_on):
+def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details, company_details, stage_details):
     company_name = None if not company_details else company_details['name'] if company_details['name'] else " ".join(
         company_details['domain'].split(".")[:-1]).title() if company_details['domain'] else None
-    stage_name = next((stage['label'] for stage in stage_details if stage['id'] == deal_properties['dealstage']), None)
+    stage_name = stage_details.get(deal_properties['dealstage'])
 
     curr_time = datetime.now(pytz.timezone('America/New_York'))
 
@@ -266,7 +268,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "NS_PROJECT_ID": deal_properties['ns_project_id__finance_only_'],
         "DEAL_AMOUNT_IN_COMPANY_CURRENCY": deal_properties['amount_in_home_currency'],
         "DEAL_TYPE": deal_properties['dealtype'],
-        "SPECIAL_FIELDS_UPDATED_ON": special_fields_updated_on,
+        "SPECIAL_FIELDS_UPDATED_ON": datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ'),
         "WORK_AHEAD": work_ahead,
         "LAST_REFRESHED_ON": curr_time
     }
@@ -405,7 +407,7 @@ def handle_special_fields(deal_id, updated_deal_properties, does_line_items_upda
     return updated_deal_properties['updatedAt']
 
 
-def handle_deal(deal, sf_cursor):
+def handle_deal(deal, sf_cursor, deals_with_companies, deals_with_line_items, owner_details, pipeline_stages):
     try:
         deal_properties = deal['properties']
         deal_id = deal['id']
@@ -417,27 +419,28 @@ def handle_deal(deal, sf_cursor):
 
         print(f"Upserting Deal {deal_id} - {deal_properties['dealname']}")
 
-        does_line_items_updated = handle_line_items(deal, sf_cursor)
-        company_associations = handle_company_details(deal_id, sf_cursor)
-        owner_details = handle_deal_owner_details(deal_owner, sf_cursor)
-        collaborators_details = handle_deal_collaborators(deal_collaborators)
+        does_line_items_updated = handle_line_items(deal, sf_cursor, deals_with_line_items)
+        company_associations = handle_company_details(deal_id, sf_cursor, deals_with_companies)
+        owner_details = handle_deal_owner_details(deal_owner, sf_cursor, owner_details)
+        collaborators_details = handle_deal_collaborators(deal_collaborators, owner_details)
         upsert_deal_collaborators(deal_id, collaborators_details, sf_cursor)
 
-        stage_details = get_deal_pipeline_stages(pipeline_id)
+        stage_details = pipeline_stages.get(pipeline_id)
         deals_request = create_deal_update_request(owner_details, collaborators_details,
-                                                   company_associations.get('associations', None))
+                                                   company_associations.get('company_details', None))
 
-        special_fields_updated_on = handle_special_fields(deal_id, deal_properties, does_line_items_updated, sf_cursor)
+        # special_fields_updated_on = handle_special_fields(deal_id, deal_properties, does_line_items_updated, sf_cursor)
         upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details,
                     company_associations.get('company_details', None),
-                    stage_details, special_fields_updated_on)
+                    stage_details)
     except Exception as ex:
         traceback.print_exc()
         print(f"Failed to updated deal - {deal['id']}, Exception: {ex}")
 
 
-def handle_deal_upsert(deal, sf_cursor):
+def handle_deal_upsert(deal, sf_cursor, deals_with_companies, deals_with_line_items, owner_details, pipeline_stages):
     deal_id = deal['id']
 
-    complete_deal_details = get_deal(deal_id)
-    handle_deal(complete_deal_details, sf_cursor)
+    complete_deal_details = deal
+    handle_deal(complete_deal_details, sf_cursor, deals_with_companies, deals_with_line_items, owner_details,
+                pipeline_stages)

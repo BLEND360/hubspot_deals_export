@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 
 from .handle_deal import handle_deal, handle_deal_upsert
 from .utils.config import SF_SYNC_INFO_TABLE
-from .utils.hubspot_api import fetch_updated_or_created_deals, get_deal
+from .utils.hubspot_api import fetch_updated_or_created_deals, get_deal, get_all_companies, get_all_stages, get_all_owners, get_all_line_items, get_deal_pipeline_stages
 from .utils.snowflake_db import close_sf_connection
 
 
@@ -82,8 +82,12 @@ def sync_deals(sf_cursor, event):
         updated_deals_since = fetch_updated_or_created_deals(formatted_datetime)
         if len(updated_deals_since) > 0:
             print(f"Deals Updated/Created Since: {sync_from} - {len(updated_deals_since)}")
+            deals_with_companies = get_all_companies()
+            pipeline_stages = get_all_stages()
+            owner_details = get_all_owners()
+            deals_with_line_items = get_all_line_items()
             for deal in updated_deals_since:
-                handle_deal_upsert(deal, sf_cursor)
+                handle_deal_upsert(deal, sf_cursor, deals_with_companies, deals_with_line_items, owner_details, pipeline_stages)
             print(f"Done - Deals Updated/Created Since: {sync_from}")
         else:
             print(f"No Deals Updated/Created Since: {sync_from}")

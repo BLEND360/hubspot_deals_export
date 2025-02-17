@@ -1,6 +1,7 @@
 import os
 
 import json
+from collections import defaultdict
 from datetime import datetime, timedelta
 
 import requests
@@ -114,6 +115,7 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
         payload = json.dumps({
             "after": after,
             "limit": 100,
+            "properties": deal_properties,
             "filterGroups": [
                 {
                     "filters": filters
@@ -128,9 +130,9 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
         response = requests.request("POST", url, headers=headers, data=payload)
         if response.status_code == 200:
             data = response.json()
-            total_deals = data['total']
-            if total_deals > 200:
-                raise Exception('More than 200 Deals updated - Skipping.')
+            # total_deals = data['total']
+            # if total_deals > 200:
+            #     raise Exception('More than 200 Deals updated - Skipping.')
             deals.extend(data['results'])
             # Check if there is more data to fetch (pagination)
             has_more = 'paging' in data and 'next' in data['paging']
@@ -281,3 +283,120 @@ def get_line_items_by_ids(line_item_ids):
     else:
         print(f"Error fetching line items: {response.status_code} - {response.text}")
         return None
+
+
+
+def get_all_companies():
+
+    url = f"{BASE_URL}/crm/v3/objects/companies?associations=deal"
+
+    payload = {}
+    headers = {
+        'Authorization': f'Bearer {API_KEY}',
+    }
+    deals_with_companies = {}
+    while url:
+        print(url)
+        response = requests.request("GET", url, headers=headers, data=payload)
+        print(response.status_code)
+        print(response.text)
+        data = response.json()
+        companies = data["results"]
+        url = data.get("paging", {}).get("next", {}).get("link")
+        for company in companies:
+            deals = company.get("associations", {}).get("deals", {}).get("results", [])
+            for deal in deals:
+                deal_id = deal["id"]
+                deals_with_companies[deal_id] = {"id": company["id"],
+                                                 "name": company["properties"]["name"],
+                                                 "domain": company["properties"]["domain"]}
+
+    return deals_with_companies
+
+
+# print(get_all_companies())
+
+# https://api.hubapi.com/crm/v3/objects/line_items?properties=name,amount,quantity,price&limit=100&associations=deals
+def get_all_line_items():
+    url = f"{BASE_URL}/crm/v3/objects/line_items?properties=name,amount,quantity,price&limit=100&associations=deals"
+
+    payload = {}
+    headers = {
+        'Authorization': f'Bearer {API_KEY}',
+    }
+    deals_with_line_items = defaultdict(list)
+    while url:
+        print(url)
+        response = requests.request("GET", url, headers=headers, data=payload)
+        data = response.json()
+        items = data["results"]
+        url = data.get("paging", {}).get("next", {}).get("link")
+        for item in items:
+            deals = item.get("associations", {}).get("deals", {}).get("results", [])
+            for deal in deals:
+                deal_id = deal["id"]
+                deals_with_line_items[deal_id].append({"id": item["id"],
+                                                       "name": item["properties"]["name"],
+                                                       "amount": item["properties"]["amount"],
+                                                       "quantity": item["properties"]["quantity"],
+                                                       "price": item["properties"]["price"],
+                                                       "updated_at": item["updatedAt"],
+                                                       "created_at": item["createdAt"]})
+
+
+    return deals_with_line_items
+
+
+# print(get_all_line_items())
+
+# https://api.hubapi.com/crm/v3/owners/?limit=100&archived=false
+def get_all_owners():
+    # url = f"{BASE_URL}/crm/v3/owners/?limit=100&archived=false"
+    urls = [f"{BASE_URL}/crm/v3/owners/?limit=100&archived=false", f"{BASE_URL}/crm/v3/owners/?limit=100&archived=true"]
+    payload = {}
+    headers = {
+        'Authorization': f'Bearer {API_KEY}',
+    }
+    owner_details = {}
+    for url in urls:
+        while url:
+            print(url)
+            response = requests.request("GET", url, headers=headers, data=payload)
+            data = response.json()
+            owners = data["results"]
+            url = data.get("paging", {}).get("next", {}).get("link")
+            for owner in owners:
+                owner_id = owner["id"]
+                name = owner["firstName"] + " " + owner["lastName"]
+                if name.strip() == "":
+                    name = ' '.join(owner["email"].split('@')[0].split('.')).title()
+                owner_details[owner_id] = {"id": owner["id"],
+                                           "email": owner["email"],
+                                           "name": name,
+                                           "archived": owner["archived"]}
+
+    return owner_details
+
+# print(get_all_owners())
+
+
+def get_all_stages():
+    url = f"{BASE_URL}/crm/v3/pipelines/deals"
+
+    payload = {}
+    headers = {
+        'Authorization': f'Bearer {API_KEY}',
+    }
+    pipeline_stages = defaultdict(dict)
+    response = requests.request("GET", url, headers=headers, data=payload)
+    data = response.json()
+    pipelines = data["results"]
+    for pipeline in pipelines:
+        pipeline_stage_dict = {stage["id"]: stage["label"] for stage in pipeline["stages"]}
+        pipeline_stages[pipeline["id"]] = pipeline_stage_dict
+
+    return pipeline_stages
+
+# print(json.dumps(get_all_stages()))
+
+
