@@ -54,7 +54,6 @@ def handle_api_request(event):
                 "body": json.dumps({"message": f"Already Sync In Progress"})
             }
 
-        print(last_status)
         lambda_client = boto3.client('lambda')
         lambda_client.invoke(
             FunctionName=f"arn:aws:lambda:us-east-1:{AWS_ACCOUNT_ID}:function:hubspot-snowflake-export",
