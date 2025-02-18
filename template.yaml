@@ -69,7 +69,7 @@ Resources:
   HubspotDealsExportScheduleRule:
     Type: AWS::Events::Rule
     Properties:
-      ScheduleExpression: 'cron(0/30 10-3 ? * MON-FRI *)'
+      ScheduleExpression: 'cron(0/5 10-3 ? * * *)'
       State: 'ENABLED'
       Name: 'HubspotDealsExportScheduleRule'
       Targets:
