@@ -1,4 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+
+import pytz
 
 from .handle_deal import handle_deal, handle_deal_upsert
 from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE
@@ -8,11 +10,10 @@ from .utils.snowflake_db import close_sf_connection, create_sf_connection
 
 
 def schedule_fetch(event_job):
-
     last_sync_info = get_deals_last_sync_info()
-    parsed_datetime = datetime.strptime(last_sync_info['last_updated_on'], "%Y-%m-%dT%H:%M:%S.%f%z")
-    last_updated_on = parsed_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
-
+    last_updated_on = (datetime.fromisoformat(last_sync_info['last_updated_on'])
+                       .astimezone(pytz.utc) - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    print(last_updated_on)
     try:
         deals = fetch_updated_or_created_deals(last_updated_on)
 
@@ -36,7 +37,6 @@ def schedule_fetch(event_job):
     except Exception as ex:
         print(f"Failed Sync - {ex}")
         return "failed"
-
 
 
 def is_valid_datetime(date_str, date_format):
@@ -71,6 +71,7 @@ def back_fill_deals(event):
         print(f"No Deals Updated/Created Since: {sync_from}")
     return "success"
 
+
 def sync_deals(event):
     sync_from = event.get('sync_from', None)
 
@@ -78,8 +79,8 @@ def sync_deals(event):
         print("Missing sync_from in the request. Exiting.")
         return
 
-    parsed_datetime = datetime.strptime(sync_from, "%Y-%m-%dT%H:%M:%S.%f%z")
-    last_updated_on = parsed_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
+    last_updated_on = (datetime.fromisoformat(sync_from)
+                       .astimezone(pytz.utc) - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
     try:
         updated_deals_since = fetch_updated_or_created_deals(last_updated_on)
