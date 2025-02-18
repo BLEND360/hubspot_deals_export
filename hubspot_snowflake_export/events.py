@@ -1,10 +1,9 @@
-import traceback
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 
 from .handle_deal import handle_deal, handle_deal_upsert
-from .utils.config import SF_SYNC_INFO_TABLE, SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE
+from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE
 from .utils.hubspot_api import fetch_updated_or_created_deals, get_deal
-from .utils.s3 import get_deals_last_sync_info, update_deals_last_sync_time
+from .utils.s3 import get_deals_last_sync_info, update_deals_last_sync_time, set_deal_sync_status
 from .utils.snowflake_db import close_sf_connection, create_sf_connection
 
 
@@ -79,11 +78,11 @@ def sync_deals(event):
         print("Missing sync_from in the request. Exiting.")
         return
 
-    parsed_datetime = datetime.strptime(sync_from, "%Y-%m-%d %H:%M:%S.%f%z")
-    formatted_datetime = parsed_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
+    parsed_datetime = datetime.strptime(sync_from, "%Y-%m-%dT%H:%M:%S.%f%z")
+    last_updated_on = parsed_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     try:
-        updated_deals_since = fetch_updated_or_created_deals(formatted_datetime)
+        updated_deals_since = fetch_updated_or_created_deals(last_updated_on)
         if len(updated_deals_since) > 0:
             print(f"Deals Updated/Created Since: {sync_from} - {len(updated_deals_since)}")
             sf_conn = create_sf_connection(SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE)
@@ -92,6 +91,7 @@ def sync_deals(event):
                 for deal in updated_deals_since:
                     handle_deal_upsert(deal, sf_cursor)
                 print(f"Done - Deals Updated/Created Since: {sync_from}")
+                update_deals_last_sync_time(event['event'].upper(), "SUCCESS")
                 close_sf_connection(sf_conn)
             except Exception as ex:
                 close_sf_connection(sf_conn)
@@ -100,6 +100,7 @@ def sync_deals(event):
             print(f"No Deals Updated/Created Since: {sync_from}")
         return "success"
     except Exception as ex:
+        set_deal_sync_status("FAILED")
         print(f"Failed Sync - {ex}")
         return "failed"
 
@@ -146,18 +147,11 @@ def bulk_deals_fetch(event):
     return "success"
 
 
-def handle_sync_status(sf_cursor):
-    get_sync_status_sql = f"""
-        SELECT SYNC_STATUS, SYNC_START_ON, LAST_UPDATED_ON FROM {SF_SYNC_INFO_TABLE} WHERE ENTITY_NAME='DEALS'
-    """
-    sf_cursor.execute(get_sync_status_sql)
-    sync_data = sf_cursor.fetchone()
+def handle_sync_status():
+    last_sync_info = get_deals_last_sync_info()
 
-    if sync_data[0] == 'PROCESSING':
+    if last_sync_info['sync_status'] == 'PROCESSING':
         return 'PROCESSING'
     else:
-        update_sync_status_sql = f"""
-            UPDATE {SF_SYNC_INFO_TABLE} SET SYNC_STATUS='PROCESSING', SYNC_START_ON=CURRENT_TIMESTAMP() WHERE ENTITY_NAME='DEALS'
-        """
-        sf_cursor.execute(update_sync_status_sql)
-        return sync_data[2]
+        set_deal_sync_status("PROCESSING", last_sync_info)
+        return last_sync_info['last_updated_on']
