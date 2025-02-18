@@ -84,14 +84,13 @@ def sync_deals(event):
     try:
         updated_deals_since = fetch_updated_or_created_deals(last_updated_on)
         if len(updated_deals_since) > 0:
-            print(f"Deals Updated/Created Since: {sync_from} - {len(updated_deals_since)}")
+            print(f"Deals Updated/Created Since: {last_updated_on} - {len(updated_deals_since)}")
             sf_conn = create_sf_connection(SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE)
             sf_cursor = sf_conn.cursor()
             try:
                 for deal in updated_deals_since:
                     handle_deal_upsert(deal, sf_cursor)
                 print(f"Done - Deals Updated/Created Since: {sync_from}")
-                update_deals_last_sync_time(event['event'].upper(), "SUCCESS")
                 close_sf_connection(sf_conn)
             except Exception as ex:
                 close_sf_connection(sf_conn)
