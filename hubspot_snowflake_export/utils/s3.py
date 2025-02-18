@@ -4,7 +4,7 @@ from datetime import datetime
 import boto3
 import pytz
 
-bucket_name = 'hubspot-deals-info'
+bucket_name = 'hubspot-deals-info-prod'
 file_key = 'deals-sync-info.json'
 
 def get_deals_last_sync_info():
