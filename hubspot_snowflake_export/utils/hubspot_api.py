@@ -137,6 +137,7 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
             # Check if there is more data to fetch (pagination)
             has_more = 'paging' in data and 'next' in data['paging']
             after = data['paging']['next']['after'] if has_more else None
+
         else:
             has_more = False
             print(f"Error fetching deals: {response.status_code} - {response.text}")
@@ -298,8 +299,8 @@ def get_all_companies():
     while url:
         print(url)
         response = requests.request("GET", url, headers=headers, data=payload)
-        print(response.status_code)
-        print(response.text)
+        # print(response.status_code)
+        # print(response.text)
         data = response.json()
         companies = data["results"]
         url = data.get("paging", {}).get("next", {}).get("link")

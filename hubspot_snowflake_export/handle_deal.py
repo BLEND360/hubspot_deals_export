@@ -19,18 +19,18 @@ def handle_company_details(deal_id, sf_cursor, deals_with_companies):
         company_name = company_name.replace("'", "''") if company_name else ""
         company_domain = deal_company_assc.get('domain', "")
 
-        merge_sql = f"""
-               MERGE INTO {SF_COMPANIES_TABLE} AS target
-               USING (SELECT '{company_id}' AS COMPANY_ID, '{company_name}' AS NAME, '{company_domain}' AS DOMAIN) AS source
-               ON target.company_id = source.company_id
-               WHEN MATCHED THEN
-                   UPDATE SET target.name = source.name, target.domain = source.domain
-               WHEN NOT MATCHED THEN
-                   INSERT (company_id, name, domain) 
-                   VALUES (source.company_id, source.name, source.domain);
-               """
-
-        sf_cursor.execute(merge_sql)
+        # merge_sql = f"""
+        #        MERGE INTO {SF_COMPANIES_TABLE} AS target
+        #        USING (SELECT '{company_id}' AS COMPANY_ID, '{company_name}' AS NAME, '{company_domain}' AS DOMAIN) AS source
+        #        ON target.company_id = source.company_id
+        #        WHEN MATCHED THEN
+        #            UPDATE SET target.name = source.name, target.domain = source.domain
+        #        WHEN NOT MATCHED THEN
+        #            INSERT (company_id, name, domain)
+        #            VALUES (source.company_id, source.name, source.domain);
+        #        """
+        #
+        # sf_cursor.execute(merge_sql)
         print(f"Upserted company {company_id} - {company_name}")
         return {"associations": deal_company_assc,
                 "company_details": {"id": company_id, "name": company_name, "domain": company_domain}}
@@ -73,54 +73,21 @@ def none_to_null_(value):
 def handle_line_items(deal, sf_cursor, deals_with_line_items):
     try:
         line_items_data = deals_with_line_items.get(deal['id'], [])
-        line_item_ids = [item["id"] for item in line_items_data]
+        sf_cursor.execute_async(f"DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE DEAL_ID= %(deal_id)s",{ 'deal_id': deal['id']})
+        query = f'''
+            INSERT INTO {SF_LINE_ITEMS_TABLE} 
+            (LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID) 
+            VALUES (%(id)s, %(name)s, %(price)s, %(quantity)s, %(amount)s, %(created_at)s, %(updated_at)s, %(deal_id)s)
+        '''
 
-        sf_cursor.execute(
-            f""" SELECT LINE_ITEM_ID, NAME, AMOUNT FROM {SF_LINE_ITEMS_TABLE} WHERE DEAL_ID='{deal['id']}' """)
-        existing_line_items = sf_cursor.fetchall()
+        # Execute the query asynchronously
+        for item in line_items_data:
+            sf_cursor.execute_async(query, {'id': item['id'], 'name': item['name'], 'price': item['price'],
+                                      'quantity': item['quantity'], 'amount': item['amount'],
+                                      'created_at': item['created_at'], 'updated_at': item['updated_at'],
+                                      'deal_id': deal['id']})
 
-        if line_items_data:
-            values_str = ", ".join([
-                                       f"('{none_to_null_(item['id'])}', '{none_to_null_(item['name'])}', {none_to_null_(item.get('price', 0))}, {none_to_null_(item.get('quantity', 0))}, {none_to_null_(item.get('amount', 0))}, '{none_to_null_(item['created_at'])}', '{none_to_null_(item['updated_at'])}', '{none_to_null_(deal['id'])}')"
-                                       for item in line_items_data])
-            upsert_query = f"""
-            MERGE INTO {SF_LINE_ITEMS_TABLE} AS target
-            USING (
-                SELECT * FROM VALUES
-                {values_str}
-            ) AS source(LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID)
-            ON target.LINE_ITEM_ID = source.LINE_ITEM_ID and target.DEAL_ID = source.DEAL_ID
-            WHEN MATCHED THEN
-                UPDATE SET
-                    target.NAME = source.NAME,
-                    target.PRICE = source.PRICE,
-                    target.QUANTITY = source.QUANTITY,
-                    target.AMOUNT = source.AMOUNT,
-                    target.CREATED_ON = source.CREATED_ON,
-                    target.UPDATED_ON = source.UPDATED_ON
-            WHEN NOT MATCHED THEN
-                INSERT (LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID)
-                VALUES (source.LINE_ITEM_ID, source.NAME, source.PRICE, source.QUANTITY, source.AMOUNT, source.CREATED_ON, source.UPDATED_ON, source.DEAL_ID);
-            """
-            sf_cursor.execute(upsert_query)
-            print(f"Upserted line items")
 
-            deleted_line_item_ids = get_deleted_line_item_ids(line_item_ids, existing_line_items)
-
-            if deleted_line_item_ids and len(deleted_line_item_ids) > 0:
-                id_str = ', '.join(map(str, deleted_line_item_ids))
-                print(f"""DELETING Line Items ({id_str})""")
-                sf_cursor.execute(f"""DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE LINE_ITEM_ID IN ({id_str})""")
-                return True
-
-            return check_line_items_updation(existing_line_items, line_items_data)
-        else:
-            if len(existing_line_items) > 0:
-                id_str = ', '.join(map(str, [item[0] for item in existing_line_items]))
-                print(f"""DELETING Line Items ({id_str})""")
-                sf_cursor.execute(f"""DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE LINE_ITEM_ID IN ({id_str})""")
-                return True
-            return False
     except Exception as ex:
         traceback.print_exc()
         print(f"Failed to upsert line items for the deal - {deal['id']}")
@@ -129,26 +96,26 @@ def handle_line_items(deal, sf_cursor, deals_with_line_items):
 
 def handle_deal_owner_details(deal_owner, sf_cursor, owner_details):
     if deal_owner:
-        owner_details = owner_details.get(deal_owner, {})
-        owner_email = owner_details['email']
-        owner_name = owner_details['name']
-        owner_id = owner_details['id']
-        is_archived = owner_details['archived']
+        deal_owner_details = owner_details.get(deal_owner, {})
+        owner_email = deal_owner_details['email']
+        owner_name = deal_owner_details['name']
+        owner_id = deal_owner_details['id']
+        is_archived = deal_owner_details['archived']
 
-        merge_sql = f"""
-               MERGE INTO {SF_DEAL_OWNERS_TABLE} AS target
-               USING (SELECT '{owner_id}' AS OWNER_ID, '{owner_name}' AS NAME, '{owner_email}' AS EMAIL, '{is_archived}' AS IS_ARCHIVED) AS source
-               ON target.owner_id = source.owner_id
-               WHEN MATCHED THEN
-                   UPDATE SET target.name = source.name, target.email = source.email, target.is_archived = source.is_archived
-               WHEN NOT MATCHED THEN
-                   INSERT (owner_id, name, email, is_archived) 
-                   VALUES (source.owner_id, source.name, source.email, source.is_archived);
-               """
-
-        sf_cursor.execute(merge_sql)
+        # merge_sql = f"""
+        #        MERGE INTO {SF_DEAL_OWNERS_TABLE} AS target
+        #        USING (SELECT '{owner_id}' AS OWNER_ID, '{owner_name}' AS NAME, '{owner_email}' AS EMAIL, '{is_archived}' AS IS_ARCHIVED) AS source
+        #        ON target.owner_id = source.owner_id
+        #        WHEN MATCHED THEN
+        #            UPDATE SET target.name = source.name, target.email = source.email, target.is_archived = source.is_archived
+        #        WHEN NOT MATCHED THEN
+        #            INSERT (owner_id, name, email, is_archived)
+        #            VALUES (source.owner_id, source.name, source.email, source.is_archived);
+        #        """
+        #
+        # sf_cursor.execute(merge_sql)
         print(f"Upserted owner {owner_id} - {owner_name}")
-        return owner_details
+        return deal_owner_details
     return None
 
 
@@ -339,7 +306,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
                 VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID, source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME, source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID, source.PROJECT_START_DATE, source.PROJECT_CLOSE_DATE, source.ENGAGEMENT_TYPE, source.DURATION_IN_MONTHS, source.DEAL_COLLABORATORS, source.DEAL_CREATED_ON, source.DEAL_UPDATED_ON, source.IS_ARCHIVED, source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE, source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON);
         """
 
-    sf_cursor.execute(merge_sql)
+    sf_cursor.execute_async(merge_sql)
     print(f"Upserted Deal {deal_id} - {deal_data['DEAL_NAME']}")
 
 
@@ -421,16 +388,16 @@ def handle_deal(deal, sf_cursor, deals_with_companies, deals_with_line_items, ow
 
         does_line_items_updated = handle_line_items(deal, sf_cursor, deals_with_line_items)
         company_associations = handle_company_details(deal_id, sf_cursor, deals_with_companies)
-        owner_details = handle_deal_owner_details(deal_owner, sf_cursor, owner_details)
+        deal_owner_details = handle_deal_owner_details(deal_owner, sf_cursor, owner_details)
         collaborators_details = handle_deal_collaborators(deal_collaborators, owner_details)
-        upsert_deal_collaborators(deal_id, collaborators_details, sf_cursor)
+        # upsert_deal_collaborators(deal_id, collaborators_details, sf_cursor)
 
         stage_details = pipeline_stages.get(pipeline_id)
-        deals_request = create_deal_update_request(owner_details, collaborators_details,
+        deals_request = create_deal_update_request(deal_owner_details, collaborators_details,
                                                    company_associations.get('company_details', None))
 
         # special_fields_updated_on = handle_special_fields(deal_id, deal_properties, does_line_items_updated, sf_cursor)
-        upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details,
+        upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, deal_owner_details,
                     company_associations.get('company_details', None),
                     stage_details)
     except Exception as ex:

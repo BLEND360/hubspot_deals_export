@@ -15,6 +15,7 @@ from .utils.snowflake_db import create_sf_connection, close_sf_connection
 
 def lambda_handler(event, context):
     sf_conn = create_sf_connection(SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE)
+    sf_conn.autocommit(True)
     sf_cursor = sf_conn.cursor()
 
 
