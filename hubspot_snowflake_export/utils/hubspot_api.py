@@ -114,7 +114,7 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
     while has_more:
         payload = json.dumps({
             "after": after,
-            "limit": 100,
+            "limit": 200,
             "properties": deal_properties,
             "filterGroups": [
                 {
@@ -127,169 +127,22 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
             'authorization': f'Bearer {API_KEY}',
             'Content-Type': 'application/json'
         }
-        response = requests.request("POST", url, headers=headers, data=payload)
+        response = requests.request("POST", url, headers=headers, data=payload, timeout=120)
         if response.status_code == 200:
             data = response.json()
-            # total_deals = data['total']
-            # if total_deals > 200:
-            #     raise Exception('More than 200 Deals updated - Skipping.')
             deals.extend(data['results'])
-            # Check if there is more data to fetch (pagination)
             has_more = 'paging' in data and 'next' in data['paging']
             after = data['paging']['next']['after'] if has_more else None
 
         else:
-            has_more = False
-            print(f"Error fetching deals: {response.status_code} - {response.text}")
-            break
+            raise Exception(f"Error fetching deals: {response.status_code} - {response.text}")
 
     return deals
-
-
-def get_updated_or_new_deals():
-    start_date = datetime.now() - timedelta(minutes=5)
-    start_date_str = start_date.isoformat()
-
-    url = f"{BASE_URL}/crm/v3/objects/deals"
-
-    params = {
-        'hapikey': API_KEY,
-        'limit': 100,
-        'properties': 'dealname,amount,dealstage,createdate,hs_lastmodifieddate',
-        'createdAt__gte': start_date_str,
-        'updatedAt__gte': start_date_str,
-    }
-
-    deals = []
-
-    while True:
-        response = requests.get(url, params=params)
-
-        if response.status_code == 200:
-            data = response.json()
-            deals.extend(data.get('results', []))
-
-            if 'paging' in data and 'next' in data['paging']:
-                params['after'] = data['paging']['next']['after']
-                print(f"Fetched {len(data['results'])} deals. Fetching next page...")
-            else:
-                print(f"Fetched all deals. Total deals: {len(deals)}")
-                break
-        else:
-            print(f"Error fetching deals: {response.status_code} - {response.text}")
-            break
-
-    return deals
-
-
-def get_deal_to_company_association(deal_id):
-    url = f"{BASE_URL}/crm/v4/objects/deals/{deal_id}/associations/company"
-    response = requests.get(url, headers=auth_headers)
-    if response.status_code == 200:
-        company_associations = response.json().get('results', [])
-        print(f"Found {len(company_associations)} companies associated with deal {deal_id}.")
-        return company_associations
-    else:
-        print(f"Error fetching company associations for deal {deal_id}: {response.status_code} - {response.text}")
-        return []
-
-
-def get_company_details(company_id):
-    url = f"{BASE_URL}/crm/v3/objects/companies/{company_id}"
-    params = {
-        'properties': 'domain,name',
-    }
-    response = requests.get(url, params=params, headers=auth_headers)
-    if response.status_code == 200:
-        company_details = response.json()
-        return company_details
-    else:
-        print(f"Error fetching company details for company {company_id}: {response.status_code} - {response.text}")
-        return None
-
-
-def get_owner_details(owner_id, search_in_archive=True):
-    owner_details = call_owner_api(owner_id, False)
-    if search_in_archive and not owner_details:
-        return call_owner_api(owner_id, True)
-    return owner_details
-
-
-def call_owner_api(owner_id, archive):
-    url = f"{BASE_URL}/crm/v3/owners/{owner_id}?archived={archive}".lower()
-    response = requests.get(url, headers=auth_headers)
-
-    if response.status_code == 200:
-        owner_details = response.json()
-        return owner_details
-    else:
-        print(
-            f"Error fetching owner details for {owner_id} with archive: {archive} : {response.status_code} - {response.text}")
-        return None
-
-
-def get_deal_pipeline_stages(pipeline_id):
-    if not pipeline_id:
-        return None
-    url = f"{BASE_URL}/crm/v3/pipelines/deals/{pipeline_id}/stages"
-    response = requests.get(url, headers=auth_headers)
-    if response.status_code == 200:
-        stage_details = response.json()
-        return stage_details['results']
-    else:
-        print(f"Error fetching deal pipeline stages {pipeline_id}: {response.status_code} - {response.text}")
-        return None
-
-
-def get_deal(deal_id):
-    if not deal_id:
-        return None
-    url = f"{BASE_URL}/crm/v3/objects/deals/{deal_id}"
-
-    params = {
-        'properties': ','.join(deal_properties),
-        'associations': 'company,line_item'
-    }
-    response = requests.get(url, params=params, headers=auth_headers)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Error fetching deal details for id {deal_id}: {response.status_code} - {response.text}")
-        return None
-
-def get_line_items_by_ids(line_item_ids):
-    if not line_item_ids or len(line_item_ids) < 1:
-        return None
-    url = f"{BASE_URL}/crm/v3/objects/line_items/batch/read"
-
-    inputs = [{"id": id} for id in line_item_ids]
-    payload = json.dumps({
-        "inputs":inputs,
-        "limit": 100,
-        "properties": [
-            "name",
-            "quantity",
-            "price",
-            "amount"
-        ]
-    })
-    headers = {
-        'authorization': f'Bearer {API_KEY}',
-        'Content-Type': 'application/json'
-    }
-    response = requests.post(url, headers=headers, data=payload)
-    if response.status_code in range(200, 300):
-        line_items = response.json()
-        return line_items['results']
-    else:
-        print(f"Error fetching line items: {response.status_code} - {response.text}")
-        return None
-
 
 
 def get_all_companies():
 
-    url = f"{BASE_URL}/crm/v3/objects/companies?associations=deal"
+    url = f"{BASE_URL}/crm/v3/objects/companies?limit=100&associations=deal"
 
     payload = {}
     headers = {
@@ -298,18 +151,23 @@ def get_all_companies():
     deals_with_companies = {}
     while url:
         print(url)
-        response = requests.request("GET", url, headers=headers, data=payload)
+        response = requests.request("GET", url, headers=headers, data=payload, timeout=120)
         # print(response.status_code)
         # print(response.text)
+        if response.status_code != 200:
+            raise Exception(f"Error fetching companies: {response.status_code} - {response.text}")
         data = response.json()
         companies = data["results"]
         url = data.get("paging", {}).get("next", {}).get("link")
         for company in companies:
             deals = company.get("associations", {}).get("deals", {}).get("results", [])
+            name = company["properties"]["name"]
+            if not name:
+                name = ' '.join(company["properties"]["domain"].split('.')[:-1]).title() if company["properties"]["domain"] else None
             for deal in deals:
                 deal_id = deal["id"]
                 deals_with_companies[deal_id] = {"id": company["id"],
-                                                 "name": company["properties"]["name"],
+                                                 "name": name,
                                                  "domain": company["properties"]["domain"]}
 
     return deals_with_companies
@@ -317,7 +175,6 @@ def get_all_companies():
 
 # print(get_all_companies())
 
-# https://api.hubapi.com/crm/v3/objects/line_items?properties=name,amount,quantity,price&limit=100&associations=deals
 def get_all_line_items():
     url = f"{BASE_URL}/crm/v3/objects/line_items?properties=name,amount,quantity,price&limit=100&associations=deals"
 
@@ -328,7 +185,9 @@ def get_all_line_items():
     deals_with_line_items = defaultdict(list)
     while url:
         print(url)
-        response = requests.request("GET", url, headers=headers, data=payload)
+        response = requests.request("GET", url, headers=headers, data=payload, timeout=120)
+        if response.status_code != 200:
+            raise Exception(f"Error fetching line items: {response.status_code} - {response.text}")
         data = response.json()
         items = data["results"]
         url = data.get("paging", {}).get("next", {}).get("link")
@@ -342,7 +201,8 @@ def get_all_line_items():
                                                        "quantity": item["properties"]["quantity"],
                                                        "price": item["properties"]["price"],
                                                        "updated_at": item["updatedAt"],
-                                                       "created_at": item["createdAt"]})
+                                                       "created_at": item["createdAt"],
+                                                       "deal_id": deal_id})
 
 
     return deals_with_line_items
@@ -350,9 +210,7 @@ def get_all_line_items():
 
 # print(get_all_line_items())
 
-# https://api.hubapi.com/crm/v3/owners/?limit=100&archived=false
 def get_all_owners():
-    # url = f"{BASE_URL}/crm/v3/owners/?limit=100&archived=false"
     urls = [f"{BASE_URL}/crm/v3/owners/?limit=100&archived=false", f"{BASE_URL}/crm/v3/owners/?limit=100&archived=true"]
     payload = {}
     headers = {
@@ -363,6 +221,8 @@ def get_all_owners():
         while url:
             print(url)
             response = requests.request("GET", url, headers=headers, data=payload)
+            if response.status_code != 200:
+                raise Exception(f"Error fetching owners: {response.status_code} - {response.text}")
             data = response.json()
             owners = data["results"]
             url = data.get("paging", {}).get("next", {}).get("link")
@@ -370,7 +230,7 @@ def get_all_owners():
                 owner_id = owner["id"]
                 name = owner["firstName"] + " " + owner["lastName"]
                 if name.strip() == "":
-                    name = ' '.join(owner["email"].split('@')[0].split('.')).title()
+                    name = ' '.join(owner["email"].split('@')[0].split('.')).title() if owner["email"] else ""
                 owner_details[owner_id] = {"id": owner["id"],
                                            "email": owner["email"],
                                            "name": name,
@@ -389,7 +249,9 @@ def get_all_stages():
         'Authorization': f'Bearer {API_KEY}',
     }
     pipeline_stages = defaultdict(dict)
-    response = requests.request("GET", url, headers=headers, data=payload)
+    response = requests.request("GET", url, headers=headers, data=payload, timeout=120)
+    if response.status_code != 200:
+        raise Exception(f"Error fetching pipeline stages: {response.status_code} - {response.text}")
     data = response.json()
     pipelines = data["results"]
     for pipeline in pipelines:
