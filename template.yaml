@@ -27,6 +27,9 @@ Parameters:
   SfWarehouse:
     Default: POWERHOUSE
     Type: String
+  S3BucketName:
+    Default: hubspot-deals-info
+    Type: String
 
 Resources:
   #Lambda Function#
@@ -51,6 +54,8 @@ Resources:
           SF_USER: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SF_USER}}"
           SF_WAREHOUSE: !Ref SfWarehouse
           AWS_ACCOUNT_ID: !Sub "${AWS::AccountId}"
+          S3_BUCKET_NAME: !Ref S3BucketName
+          API_AUTH_KEY: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:HUBSPOT_SYNC_API_KEY}}"
       Events:
         SingleDealUpdate:
           Type: Api

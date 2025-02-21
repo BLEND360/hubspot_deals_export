@@ -4,7 +4,9 @@ from datetime import datetime
 import boto3
 import pytz
 
-bucket_name = 'hubspot-deals-info-prod'
+from hubspot_snowflake_export.utils.config import S3_BUCKET_NAME
+
+bucket_name = S3_BUCKET_NAME
 file_key = 'deals-sync-info.json'
 
 def get_deals_last_sync_info():
