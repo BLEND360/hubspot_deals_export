@@ -22,7 +22,7 @@ Parameters:
     Default: SNOWFLAKE_RESOURCE_REQUEST_ADMIN
     Type: String
   SfSchema:
-    Default: PRICING_TOOL_SANDBOX
+    Default: PRICING_TOOL_SANDBOX_HYBRID
     Type: String
   SfWarehouse:
     Default: POWERHOUSE

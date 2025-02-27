@@ -22,6 +22,7 @@ s3_prefix = "hubspot-deals-export"
 region = "us-east-1"
 profile = "dev-admin"
 image_repositories = []
+parameter_overrides= "SfSchema=PRICING_TOOL_SANDBOX_HYBRID"
 
 [dev.package.parameters]
 resolve_s3 = true

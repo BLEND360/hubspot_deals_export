@@ -13,7 +13,6 @@ def schedule_fetch(event_job):
     last_sync_info = get_deals_last_sync_info()
     last_updated_on = (datetime.fromisoformat(last_sync_info['last_updated_on'])
                        .astimezone(pytz.utc) - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    print(last_updated_on)
     try:
         deals = fetch_updated_or_created_deals(last_updated_on)
 
