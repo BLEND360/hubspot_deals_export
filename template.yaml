@@ -69,6 +69,12 @@ Resources:
             RestApiId: !Ref SyncHubspotDealsAPI
             Path: /sync/deals
             Method: post
+        HubspotSyncWebhook:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SyncHubspotDealsAPI
+            Path: /hubspot/deals/sync
+            Method: post
 
   #Rule - to run cron job#
   HubspotDealsExportScheduleRule:

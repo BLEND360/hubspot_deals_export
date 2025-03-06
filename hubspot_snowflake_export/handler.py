@@ -1,12 +1,11 @@
 import json
 import traceback
-from datetime import datetime, timedelta
 
 import boto3
-import pytz
 
 from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, sync_deals, schedule_fetch, handle_sync_status
 from .handle_deal import handle_deal
+from .hubspot_events import handle_webhook_from_hubspot
 from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE, API_AUTH_KEY, \
     AWS_ACCOUNT_ID
 from .utils.hubspot_api import get_deal
@@ -16,8 +15,9 @@ from .utils.snowflake_db import create_sf_connection, close_sf_connection
 
 def handle_api_request(event):
     headers = event.get('headers', {})
+    isHubspotEvent = '/hubspot/deals/sync' in event.get('path', "")
     authorization_header = headers.get('Auth-Key')
-    if authorization_header != API_AUTH_KEY:
+    if not isHubspotEvent and authorization_header != API_AUTH_KEY:
         return {
             "statusCode": 401,
             "body": json.dumps({"message": f"Unauthorised"})
@@ -44,6 +44,12 @@ def handle_api_request(event):
                 "statusCode": 400,
                 "body": json.dumps({"message": "Failed to Sync Deal"})
             }
+    elif event['path'] and '/hubspot/deals/sync' in event['path']:
+        handle_webhook_from_hubspot(event)
+        return {
+            "statusCode": 202,
+            "body": json.dumps({"message": f"Success"})
+        }
     else:
         print("[API] Invoking Async Function - To Sync Deals")
         last_status = handle_sync_status()
