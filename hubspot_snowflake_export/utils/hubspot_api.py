@@ -5,6 +5,9 @@ from datetime import datetime, timedelta
 
 import requests
 
+from hubspot_snowflake_export.utils.config import SYNC_ALERT_TO_EMAILS, SYNC_ALERT_CC_EMAILS
+from hubspot_snowflake_export.utils.send_mail import send_email
+
 # HubSpot API base URL
 BASE_URL = "https://api.hubapi.com"
 
@@ -105,6 +108,7 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
                 "value": created_after
             }
         )
+    is_first = True
     while has_more:
         payload = json.dumps({
             "after": after,
@@ -124,6 +128,25 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
         if response.status_code == 200:
             data = response.json()
             total_deals = data['total']
+            time_gap = datetime.utcnow() - datetime.strptime(start_date_time, "%Y-%m-%dT%H:%M:%SZ")
+            if is_first and total_deals > 25 and time_gap<timedelta(hours=8):
+                # need to send alert email to one email group
+
+                subject = "HubSpot Deals Sync Alert!"
+                content = f'''
+                    <html>
+                    <body>
+                    <p>Dear Team,</p>
+                    <p>HubSpot Deals Sync Alert!</p>
+                    <p>There are more than 25 deals created/updated since {start_date_time}.</p>
+                    <p>Please check the HubSpot Deals Sync.</p>
+                    </body>
+                    </html>
+                '''
+                email_to_list = SYNC_ALERT_TO_EMAILS.split(",")
+                email_cc_list = SYNC_ALERT_CC_EMAILS.split(",")
+                send_email(email_to_list, subject=subject, content=content, content_type="html",
+                           email_cc_list=email_cc_list, importance=True)
             if total_deals > 200:
                 print('More than 200 Deals updated - Skipping.')
                 return []
@@ -135,6 +158,7 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
             has_more = False
             print(f"Error fetching deals: {response.status_code} - {response.text}")
             break
+        is_first = False
 
     return deals
 
