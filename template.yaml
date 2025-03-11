@@ -56,6 +56,11 @@ Resources:
           AWS_ACCOUNT_ID: !Sub "${AWS::AccountId}"
           S3_BUCKET_NAME: !Ref S3BucketName
           API_AUTH_KEY: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:HUBSPOT_SYNC_API_KEY}}"
+          RRT_TENANT_ID: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:RRT_TENANT_ID}}"
+          RRT_CLIENT_ID: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:RRT_CLIENT_ID}}"
+          RRT_CLIENT_SECRET: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:RRT_CLIENT_SECRET}}"
+          SYNC_ALERT_TO_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_TO_EMAILS}}"
+          SYNC_ALERT_CC_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_CC_EMAILS}}"
       Events:
         SingleDealUpdate:
           Type: Api
