@@ -61,6 +61,7 @@ Resources:
           RRT_CLIENT_SECRET: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:RRT_CLIENT_SECRET}}"
           SYNC_ALERT_TO_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_TO_EMAILS}}"
           SYNC_ALERT_CC_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_CC_EMAILS}}"
+          ENV_: !Ref Environment
       Events:
         SingleDealUpdate:
           Type: Api

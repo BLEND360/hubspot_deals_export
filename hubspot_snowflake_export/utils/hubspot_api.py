@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 import requests
 
-from hubspot_snowflake_export.utils.config import SYNC_ALERT_TO_EMAILS, SYNC_ALERT_CC_EMAILS
+from hubspot_snowflake_export.utils.config import SYNC_ALERT_TO_EMAILS, SYNC_ALERT_CC_EMAILS, ENV_
 from hubspot_snowflake_export.utils.send_mail import send_email
 
 # HubSpot API base URL
@@ -132,13 +132,16 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
             if is_first and total_deals > 25 and time_gap<timedelta(hours=8):
                 # need to send alert email to one email group
 
-                subject = "HubSpot Deals Sync Alert!"
+                hs_acc = "Sandbox"
+                if ENV_ == 'prod':
+                    hs_acc = "Production"
+                subject = f"[{ENV_.upper()}] HubSpot Deals Sync Alert!"
                 content = f'''
                     <html>
                     <body>
                     <p>Dear Team,</p>
                     <p>HubSpot Deals Sync Alert!</p>
-                    <p>There are more than 25 deals created/updated since {start_date_time}.</p>
+                    <p>There are more than 25 deals created/updated since {start_date_time} in {hs_acc} HubSpot.</p>
                     <p>Please check the HubSpot Deals Sync.</p>
                     </body>
                     </html>
@@ -147,8 +150,8 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
                 email_cc_list = SYNC_ALERT_CC_EMAILS.split(",")
                 send_email(email_to_list, subject=subject, content=content, content_type="html",
                            email_cc_list=email_cc_list, importance=True)
-            if total_deals > 200:
-                print('More than 200 Deals updated - Skipping.')
+            if total_deals > 100:
+                print('More than 100 Deals updated - Skipping.')
                 return []
             deals.extend(data['results'])
             # Check if there is more data to fetch (pagination)
