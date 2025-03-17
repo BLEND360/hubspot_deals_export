@@ -85,7 +85,10 @@ deal_properties = [
 ]
 
 
-def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z"):
+def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z", use_backup=False):
+    if use_backup:
+        with open("deals.json", "r") as f:
+            return json.load(f)
     url = f"{BASE_URL}/crm/v3/objects/deals/search"
 
     deals = []
@@ -136,11 +139,15 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
 
         else:
             raise Exception(f"Error fetching deals: {response.status_code} - {response.text}")
-
+    with open("deals.json", "w") as f:
+        f.write(json.dumps(deals, indent=4))
     return deals
 
 
-def get_all_companies():
+def get_all_companies(use_backup=False):
+    if use_backup:
+        with open("companies.json", "r") as f:
+            return json.load(f)
 
     url = f"{BASE_URL}/crm/v3/objects/companies?limit=100&associations=deal"
 
@@ -154,6 +161,8 @@ def get_all_companies():
         response = requests.request("GET", url, headers=headers, data=payload, timeout=120)
         # print(response.status_code)
         # print(response.text)
+        with open("companies_raw.txt", "a", encoding="utf-8") as f:
+            f.write(response.text)
         if response.status_code != 200:
             raise Exception(f"Error fetching companies: {response.status_code} - {response.text}")
         data = response.json()
@@ -161,6 +170,10 @@ def get_all_companies():
         url = data.get("paging", {}).get("next", {}).get("link")
         for company in companies:
             deals = company.get("associations", {}).get("deals", {}).get("results", [])
+            additional_associated_deals_link = company.get("associations", {}).get("deals", {}).get("paging", {}).get("next", {}).get("link")
+            if additional_associated_deals_link:
+                additional_deals = get_additional_association_deals_of_company(additional_associated_deals_link)
+                deals.extend(additional_deals)
             name = company["properties"]["name"]
             if not name:
                 name = ' '.join(company["properties"]["domain"].split('.')[:-1]).title() if company["properties"]["domain"] else None
@@ -169,13 +182,17 @@ def get_all_companies():
                 deals_with_companies[deal_id] = {"id": company["id"],
                                                  "name": name,
                                                  "domain": company["properties"]["domain"]}
-
+    with open("companies.json", "w") as f:
+        f.write(json.dumps(deals_with_companies, indent=4))
     return deals_with_companies
 
 
 # print(get_all_companies())
 
-def get_all_line_items():
+def get_all_line_items(use_backup=False):
+    if use_backup:
+        with open("line_items.json", "r") as f:
+            return json.load(f)
     url = f"{BASE_URL}/crm/v3/objects/line_items?properties=name,amount,quantity,price&limit=100&associations=deals"
 
     payload = {}
@@ -205,12 +222,18 @@ def get_all_line_items():
                                                        "deal_id": deal_id})
 
 
+    with open("line_items.json", "w") as f:
+        f.write(json.dumps(deals_with_line_items, indent=4))
     return deals_with_line_items
 
 
 # print(get_all_line_items())
 
-def get_all_owners():
+def get_all_owners(use_backup=False):
+    if use_backup:
+        with open("owners.json", "r") as f:
+            return json.load(f)
+
     urls = [f"{BASE_URL}/crm/v3/owners/?limit=100&archived=false", f"{BASE_URL}/crm/v3/owners/?limit=100&archived=true"]
     payload = {}
     headers = {
@@ -235,7 +258,8 @@ def get_all_owners():
                                            "email": owner["email"],
                                            "name": name,
                                            "archived": owner["archived"]}
-
+    with open("owners.json", "w") as f:
+        f.write(json.dumps(owner_details, indent=4))
     return owner_details
 
 # print(get_all_owners())
@@ -262,4 +286,22 @@ def get_all_stages():
 
 # print(json.dumps(get_all_stages()))
 
+def get_additional_association_deals_of_company(url):
+    payload = {}
+    headers = {
+        'Authorization': f'Bearer {API_KEY}',
+    }
+    associated_deals = []
+    while url:
+        response = requests.request("GET", url, headers=headers, data=payload, timeout=120)
+        with open("additional_association_deals_raw.txt", "a", encoding="utf-8") as f:
+            f.write(url)
+            f.write("\n")
+            f.write(response.text)
+        if response.status_code != 200:
+            raise Exception(f"Error fetching additional association deals: {response.status_code} - {response.text}")
+        data = response.json()
+        associated_deals.extend(data["results"])
+        url = data.get("paging", {}).get("next", {}).get("link")
+    return associated_deals
 
