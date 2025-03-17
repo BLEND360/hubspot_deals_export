@@ -98,7 +98,12 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
             "propertyName": "hs_lastmodifieddate",
             "operator": "GT",
             "value": start_date_time
-        }
+        },
+                {
+                    "propertyName": "pipeline",
+                    "operator": "IN",
+                    "values": ["74948272", "35923868", "663516528"]
+                }
     ]
     if not sync_older:
         filters.append(
@@ -150,8 +155,8 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
                 email_cc_list = SYNC_ALERT_CC_EMAILS.split(",")
                 send_email(email_to_list, subject=subject, content=content, content_type="html",
                            email_cc_list=email_cc_list, importance=True)
-            if total_deals > 100:
-                print('More than 100 Deals updated - Skipping.')
+            if total_deals > 150:
+                print('More than 150 Deals updated - Skipping.')
                 return []
             deals.extend(data['results'])
             # Check if there is more data to fetch (pagination)

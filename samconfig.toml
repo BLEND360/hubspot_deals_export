@@ -57,7 +57,7 @@ s3_prefix = "hubspot-deals-export"
 region = "us-east-1"
 profile = "prod-admin"
 image_repositories = []
-parameter_overrides= "Environment=prod SfSchema=PRICING_TOOL_PROD_HYBRID SecretName=pricing_app/prod S3BucketName=hubspot-deals-info-prod"
+parameter_overrides= "Environment=prod SfSchema=PRICING_TOOL_PROD SecretName=pricing_app/prod S3BucketName=hubspot-deals-info-prod"
 
 [prod.package.parameters]
 resolve_s3 = true
