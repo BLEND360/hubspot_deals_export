@@ -186,43 +186,38 @@ def sync_deals(event):
         )
         print(f"Done - Deals Updated/Created Since: {sync_from}")
         # #####################################################################
-        try:
-            sf_cursor.execute(f"CREATE OR REPLACE TEMPORARY TABLE LINE_ITEMS_TEMP LIKE {SF_LINE_ITEMS_TABLE}")
-            sf_cursor.executemany("""INSERT INTO LINE_ITEMS_TEMP (LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID)
-                VALUES (%(id)s, %(name)s, %(price)s, %(quantity)s, %(amount)s, %(created_at)s, %(updated_at)s, %(deal_id)s)""",
-                                  line_items)
-            sf_cursor.execute(f"DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE DEAL_ID IN (%(line_items_deals)s)",
-                              {'line_items_deals': line_items_deals})
+        sf_cursor.execute(f"CREATE OR REPLACE TEMPORARY TABLE LINE_ITEMS_TEMP LIKE {SF_LINE_ITEMS_TABLE}")
+        sf_cursor.executemany("""INSERT INTO LINE_ITEMS_TEMP (LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID)
+            VALUES (%(id)s, %(name)s, %(price)s, %(quantity)s, %(amount)s, %(created_at)s, %(updated_at)s, %(deal_id)s)""",
+                              line_items)
+        sf_cursor.execute(f"DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE DEAL_ID IN (%(line_items_deals)s)",
+                          {'line_items_deals': line_items_deals})
 
-            sf_cursor.execute(f"""
-                MERGE INTO {SF_LINE_ITEMS_TABLE} AS target
-                USING LINE_ITEMS_TEMP AS source
-                ON target.LINE_ITEM_ID = source.LINE_ITEM_ID
-                WHEN MATCHED THEN
-                    UPDATE SET target.NAME = source.NAME,
-                    target.PRICE = source.PRICE,
-                    target.QUANTITY = source.QUANTITY,
-                    target.AMOUNT = source.AMOUNT,
-                    target.CREATED_ON = source.CREATED_ON,
-                    target.UPDATED_ON = source.UPDATED_ON,
-                    target.DEAL_ID = source.DEAL_ID
-                WHEN NOT MATCHED THEN
-                    INSERT (LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID)
-                    VALUES (source.LINE_ITEM_ID, source.NAME, source.PRICE, source.QUANTITY, source.AMOUNT,
-                    source.CREATED_ON, source.UPDATED_ON, source.DEAL_ID)
-            """
-            )
-
-        except:
-            traceback.format_exc()
-            sf_conn.rollback()
-            raise
+        sf_cursor.execute(f"""
+            MERGE INTO {SF_LINE_ITEMS_TABLE} AS target
+            USING LINE_ITEMS_TEMP AS source
+            ON target.LINE_ITEM_ID = source.LINE_ITEM_ID
+            WHEN MATCHED THEN
+                UPDATE SET target.NAME = source.NAME,
+                target.PRICE = source.PRICE,
+                target.QUANTITY = source.QUANTITY,
+                target.AMOUNT = source.AMOUNT,
+                target.CREATED_ON = source.CREATED_ON,
+                target.UPDATED_ON = source.UPDATED_ON,
+                target.DEAL_ID = source.DEAL_ID
+            WHEN NOT MATCHED THEN
+                INSERT (LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID)
+                VALUES (source.LINE_ITEM_ID, source.NAME, source.PRICE, source.QUANTITY, source.AMOUNT,
+                source.CREATED_ON, source.UPDATED_ON, source.DEAL_ID)
+        """
+        )
         print("done line items insert")
 
         # #####################################################################
         return "success"
     except Exception as ex:
         print(traceback.format_exc())
+        sf_conn.rollback()
         print(f"Failed Sync - {ex}")
         return "failed"
     finally:
