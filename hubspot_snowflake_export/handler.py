@@ -13,6 +13,8 @@ from .utils.s3 import update_deals_last_sync_time
 from .utils.snowflake_db import create_sf_connection, close_sf_connection
 
 
+sqs = boto3.client('sqs')
+
 def handle_api_request(event):
     headers = event.get('headers', {})
     isHubspotEvent = '/hubspot/deals/sync' in event.get('path', "")
@@ -45,7 +47,7 @@ def handle_api_request(event):
                 "body": json.dumps({"message": "Failed to Sync Deal"})
             }
     elif event['path'] and '/hubspot/deals/sync' in event['path']:
-        return handle_webhook_from_hubspot(event)
+        return handle_webhook_from_hubspot(event, sqs)
     else:
         print("[API] Invoking Async Function - To Sync Deals")
         last_status = handle_sync_status()
