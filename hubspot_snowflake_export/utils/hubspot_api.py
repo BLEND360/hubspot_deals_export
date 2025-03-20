@@ -99,11 +99,11 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
             "operator": "GT",
             "value": start_date_time
         },
-                {
-                    "propertyName": "pipeline",
-                    "operator": "IN",
-                    "values": ["74948272", "35923868", "663516528"]
-                }
+        {
+            "propertyName": "pipeline",
+            "operator": "IN",
+            "values": ["74948272", "35923868", "663516528"]
+        }
     ]
     if not sync_older:
         filters.append(
@@ -134,7 +134,7 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
             data = response.json()
             total_deals = data['total']
             time_gap = datetime.utcnow() - datetime.strptime(start_date_time, "%Y-%m-%dT%H:%M:%SZ")
-            if is_first and total_deals > 25 and time_gap<timedelta(hours=8):
+            if is_first and total_deals > 25 and time_gap < timedelta(hours=8):
                 # need to send alert email to one email group
 
                 hs_acc = "Sandbox"
@@ -282,6 +282,7 @@ def get_deal(deal_id):
         print(f"Error fetching deal details for id {deal_id}: {response.status_code} - {response.text}")
         return None
 
+
 def get_line_items_by_ids(line_item_ids):
     if not line_item_ids or len(line_item_ids) < 1:
         return None
@@ -289,7 +290,7 @@ def get_line_items_by_ids(line_item_ids):
 
     inputs = [{"id": id} for id in line_item_ids]
     payload = json.dumps({
-        "inputs":inputs,
+        "inputs": inputs,
         "limit": 100,
         "properties": [
             "name",

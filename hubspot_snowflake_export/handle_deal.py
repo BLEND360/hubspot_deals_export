@@ -156,10 +156,10 @@ def parse_owner_details(owner_details):
         if owner_name_:
             owner_name = owner_details['firstName'] + ' ' + owner_details['lastName']
         else:
-            owner_name = ' '.join(owner_email.split('@')[0].split('.')).upper()
+            owner_name = ' '.join(owner_email.split('@')[0].split('.')).title()
         owner_id = owner_details['id']
         is_archived = owner_details['userId'] is None
-        return {"id": owner_id, "name": owner_name, "email": owner_email, "is_archived": is_archived}
+        return {"id": owner_id, "name": owner_name.replace("'", "''"), "email": owner_email, "is_archived": is_archived}
     return None
 
 

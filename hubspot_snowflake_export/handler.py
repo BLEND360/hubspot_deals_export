@@ -45,11 +45,7 @@ def handle_api_request(event):
                 "body": json.dumps({"message": "Failed to Sync Deal"})
             }
     elif event['path'] and '/hubspot/deals/sync' in event['path']:
-        handle_webhook_from_hubspot(event)
-        return {
-            "statusCode": 202,
-            "body": json.dumps({"message": f"Success"})
-        }
+        return handle_webhook_from_hubspot(event)
     else:
         print("[API] Invoking Async Function - To Sync Deals")
         last_status = handle_sync_status()
