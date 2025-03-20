@@ -32,7 +32,44 @@ Parameters:
     Type: String
 
 Resources:
-  #Lambda Function#
+
+  # SQS #
+  HubspotWebhookMessages:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: 'HubspotWebhookMessages'
+      VisibilityTimeout: 900
+
+  CustomLambdaExecuteRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+        - arn:aws:iam::aws:policy/AWSLambdaExecute
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
+        - arn:aws:iam::aws:policy/AmazonVPCFullAccess
+        - arn:aws:iam::aws:policy/AWSLambda_FullAccess
+      Policies:
+        - PolicyName: CustomLambdaExecute
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: '*'
+
   HubspotDealsExportToSnowflake:
     Type: AWS::Serverless::Function
     Properties:
@@ -41,6 +78,7 @@ Resources:
       Runtime: python3.12
       Timeout: 900
       MemorySize: 1024
+      Role: !GetAtt CustomLambdaExecuteRole.Arn
       Architectures:
         - x86_64
       Environment:
@@ -61,6 +99,7 @@ Resources:
           RRT_CLIENT_SECRET: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:RRT_CLIENT_SECRET}}"
           SYNC_ALERT_TO_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_TO_EMAILS}}"
           SYNC_ALERT_CC_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_CC_EMAILS}}"
+          HUBSPOT_SYNC_QUEUE: !Ref HubspotWebhookMessages
           ENV_: !Ref Environment
       Events:
         SingleDealUpdate:
@@ -81,6 +120,48 @@ Resources:
             RestApiId: !Ref SyncHubspotDealsAPI
             Path: /hubspot/deals/sync
             Method: post
+
+  HubspotWebhookSync:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: 'hubspot-webhook-sync'
+      Handler: hubspot_snowflake_export.sqs_handler.lambda_handler
+      Runtime: python3.12
+      Timeout: 900
+      MemorySize: 1024
+      Role:  !GetAtt CustomLambdaExecuteRole.Arn
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          HUBSPOT_API_KEY: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:HUBSPOT_TOKEN}}"
+          SF_ACCOUNT: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SF_ACCOUNT}}"
+          SF_DATABASE: !Ref SfDatabase
+          SF_PASSWORD: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SF_PASSWORD}}"
+          SF_ROLE: !Ref SfRole
+          SF_SCHEMA: !Ref SfSchema
+          SF_USER: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SF_USER}}"
+          SF_WAREHOUSE: !Ref SfWarehouse
+          AWS_ACCOUNT_ID: !Sub "${AWS::AccountId}"
+          S3_BUCKET_NAME: !Ref S3BucketName
+          API_AUTH_KEY: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:HUBSPOT_SYNC_API_KEY}}"
+          RRT_TENANT_ID: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:RRT_TENANT_ID}}"
+          RRT_CLIENT_ID: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:RRT_CLIENT_ID}}"
+          RRT_CLIENT_SECRET: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:RRT_CLIENT_SECRET}}"
+          SYNC_ALERT_TO_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_TO_EMAILS}}"
+          SYNC_ALERT_CC_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_CC_EMAILS}}"
+          HUBSPOT_SYNC_QUEUE: !Ref HubspotWebhookMessages
+          ENV_: !Ref Environment
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt HubspotWebhookMessages.Arn
+            BatchSize: 1000
+            MaximumBatchingWindowInSeconds: 90
+            Enabled: true
+            ScalingConfig:
+              MaximumConcurrency: 2
 
   #Rule - to run cron job#
   HubspotDealsExportScheduleRule:

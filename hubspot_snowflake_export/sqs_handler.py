@@ -1,5 +1,4 @@
 import json
-import boto3
 
 from hubspot_snowflake_export.bulk_events import sync_deals
 from hubspot_snowflake_export.handle_deal import handle_deal
