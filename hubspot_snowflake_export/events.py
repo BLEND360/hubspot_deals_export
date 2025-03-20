@@ -61,7 +61,9 @@ def sync_deals(event):
                 work_ahead = 'No'
             else:
                 work_ahead = deal_properties['work_ahead']
-            deal_owner_details = owner_details.get(deal_properties['hubspot_owner_id'])
+            deal_owner_details = owner_details.get(deal_properties['hubspot_owner_id'], {})
+            delivery_lead_details = owner_details.get(deal_properties['delivery_lead'], {})
+            solution_lead_details = owner_details.get(deal_properties['solution_lead'], {})
             company_details = deals_with_companies.get(deal_id, {})
             deal_collaborators_str = deal_properties['hs_all_collaborator_owner_ids']
             deal_collaborators = []
@@ -77,6 +79,12 @@ def sync_deals(event):
                 "DEAL_OWNER_ID": deal_properties['hubspot_owner_id'],
                 "DEAL_OWNER_EMAIL": deal_owner_details.get('email'),
                 "DEAL_OWNER_NAME": deal_owner_details.get('name'),
+                "DELIVERY_LEAD_ID": deal_properties['delivery_lead'],
+                "DELIVERY_LEAD_EMAIL": delivery_lead_details.get('email'),
+                "DELIVERY_LEAD_NAME": delivery_lead_details.get('name'),
+                "SOLUTION_LEAD_ID": deal_properties['solution_lead'],
+                "SOLUTION_LEAD_EMAIL": solution_lead_details.get('email'),
+                "SOLUTION_LEAD_NAME": solution_lead_details.get('name'),
                 "DEAL_STAGE_ID": deal_properties['dealstage'],
                 "DEAL_STAGE_NAME": stage_name,
                 "COMPANY_ID": company_details.get('id'),
@@ -126,7 +134,8 @@ def sync_deals(event):
             DEAL_TO_COMPANY_ASSOCIATIONS, PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE,
             DURATION_IN_MONTHS, DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN,
             NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD,
-            LAST_REFRESHED_ON)
+            LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID,
+            SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME)
              VALUES 
             (%(DEAL_ID)s, %(DEAL_NAME)s, %(DEAL_OWNER)s, %(DEAL_OWNER_ID)s, %(DEAL_OWNER_EMAIL)s,
             %(DEAL_OWNER_NAME)s, %(DEAL_STAGE_ID)s, %(DEAL_STAGE_NAME)s, %(COMPANY_ID)s, %(COMPANY_NAME)s,
@@ -134,7 +143,8 @@ def sync_deals(event):
             %(ENGAGEMENT_TYPE)s, %(DURATION_IN_MONTHS)s, %(DEAL_COLLABORATORS)s, %(DEAL_CREATED_ON)s,
             %(DEAL_UPDATED_ON)s, %(IS_ARCHIVED)s, %(COMPANY_DOMAIN)s, %(NS_PROJECT_ID)s,
             %(DEAL_AMOUNT_IN_COMPANY_CURRENCY)s, %(DEAL_TYPE)s, CURRENT_TIMESTAMP(), %(WORK_AHEAD)s,
-            CURRENT_TIMESTAMP())""",
+            CURRENT_TIMESTAMP(), %(DELIVERY_LEAD_ID)s, %(DELIVERY_LEAD_EMAIL)s, %(DELIVERY_LEAD_NAME)s,
+            %(SOLUTION_LEAD_ID)s, %(SOLUTION_LEAD_EMAIL)s, %(SOLUTION_LEAD_NAME)s)""",
                               raw_deals)
         # upsert from temp table to main table
         print("Upserting data into main table")
@@ -168,20 +178,30 @@ def sync_deals(event):
                 target.DEAL_TYPE = source.DEAL_TYPE,
                 target.SPECIAL_FIELDS_UPDATED_ON = source.SPECIAL_FIELDS_UPDATED_ON,
                 target.WORK_AHEAD = source.WORK_AHEAD,
-                target.LAST_REFRESHED_ON = source.LAST_REFRESHED_ON
+                target.LAST_REFRESHED_ON = source.LAST_REFRESHED_ON,
+                target.DELIVERY_LEAD_ID = source.DELIVERY_LEAD_ID,
+                target.DELIVERY_LEAD_EMAIL = source.DELIVERY_LEAD_EMAIL,
+                target.DELIVERY_LEAD_NAME = source.DELIVERY_LEAD_NAME,
+                target.SOLUTION_LEAD_ID = source.SOLUTION_LEAD_ID,
+                target.SOLUTION_LEAD_EMAIL = source.SOLUTION_LEAD_EMAIL,
+                target.SOLUTION_LEAD_NAME = source.SOLUTION_LEAD_NAME
             WHEN NOT MATCHED THEN
                 INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME,
                 DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS,
                 PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS,
                 DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN, NS_PROJECT_ID,
-                DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON)
+                DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON,
+                DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL,
+                SOLUTION_LEAD_NAME)
                 VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID,
                 source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME,
                 source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID,
                 source.PROJECT_START_DATE, source.PROJECT_CLOSE_DATE, source.ENGAGEMENT_TYPE, source.DURATION_IN_MONTHS,
                 source.DEAL_COLLABORATORS, source.DEAL_CREATED_ON, source.DEAL_UPDATED_ON, source.IS_ARCHIVED,
                 source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE,
-                source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON)
+                source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON, source.DELIVERY_LEAD_ID,
+                source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID,
+                source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME)
         """
         )
         print(f"Done - Deals Updated/Created Since: {sync_from}")

@@ -83,7 +83,9 @@ deal_properties = [
     # "current_stage",
     # "engagement_type",
     "engagement_type__cloned_",
-    "work_ahead"
+    "work_ahead",
+    "delivery_lead",
+    "solution_lead",
 ]
 
 max_all_retry = 3
