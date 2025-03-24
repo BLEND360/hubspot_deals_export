@@ -38,7 +38,7 @@ Resources:
     Type: 'AWS::SQS::Queue'
     Properties:
       QueueName: 'HubspotWebhookMessages'
-      VisibilityTimeout: 900
+      VisibilityTimeout: 1020
 
   CustomLambdaExecuteRole:
     Type: 'AWS::IAM::Role'
@@ -158,10 +158,8 @@ Resources:
           Properties:
             Queue: !GetAtt HubspotWebhookMessages.Arn
             BatchSize: 1000
-            MaximumBatchingWindowInSeconds: 90
+            MaximumBatchingWindowInSeconds: 120
             Enabled: true
-            ScalingConfig:
-              MaximumConcurrency: 2
 
   #Rule - to run cron job#
   HubspotDealsExportScheduleRule:

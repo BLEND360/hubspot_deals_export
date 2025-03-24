@@ -3,7 +3,8 @@ import traceback
 
 import boto3
 
-from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, sync_deals, schedule_fetch, handle_sync_status
+from .bulk_events import sync_deals
+from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, schedule_fetch, handle_sync_status
 from .handle_deal import handle_deal
 from .hubspot_events import handle_webhook_from_hubspot
 from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE, API_AUTH_KEY, \
@@ -12,8 +13,8 @@ from .utils.hubspot_api import get_deal
 from .utils.s3 import update_deals_last_sync_time
 from .utils.snowflake_db import create_sf_connection, close_sf_connection
 
-
 sqs = boto3.client('sqs')
+
 
 def handle_api_request(event):
     headers = event.get('headers', {})
@@ -63,10 +64,10 @@ def handle_api_request(event):
             FunctionName=f"arn:aws:lambda:us-east-1:{AWS_ACCOUNT_ID}:function:hubspot-snowflake-export",
             InvocationType="Event",
             Payload=json.dumps(
-                {'event': 'MANUAL_SYNC', 'sync_from': last_status})
+                {'event': 'MANUAL_SYNC', 'sync_from': "2024-01-01 00:00:00.000+00:00"})
         )
 
-        print("Invoked Lambda with Event", {'event': 'MANUAL_SYNC', 'sync_from': last_status})
+        print("Invoked Lambda with Event", {'event': 'MANUAL_SYNC', 'sync_from': "2024-01-01 00:00:00.000+00:00"})
         return {
             "statusCode": 202,
             "body": json.dumps({"message": f"Accepted - Sync for all Deal"})
