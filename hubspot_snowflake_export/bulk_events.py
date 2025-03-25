@@ -27,6 +27,9 @@ def sync_deals(event):
     else:
         formatted_datetime = None
 
+    if deal_ids:
+        deal_ids = list(set(deal_ids))
+
     updated_deals_since = fetch_updated_or_created_deals(start_date_time=formatted_datetime, deal_ids=deal_ids)
     if len(updated_deals_since) <= 0:
         print(f"No Deals Updated/Created Since: {formatted_datetime}")

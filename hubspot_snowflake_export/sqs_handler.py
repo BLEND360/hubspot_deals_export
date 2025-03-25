@@ -20,6 +20,8 @@ def lambda_handler(event, context):
         if deal_to_update:
             deal_ids.append(deal_to_update)
 
+    deal_ids = list(set(deal_ids))
+
     if deal_ids and len(deal_ids) < 20:
         sf_conn = create_sf_connection(SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE)
         sf_cursor = sf_conn.cursor()
