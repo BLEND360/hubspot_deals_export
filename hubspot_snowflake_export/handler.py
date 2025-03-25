@@ -11,6 +11,7 @@ from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE, API_AUT
     AWS_ACCOUNT_ID
 from .utils.hubspot_api import get_deal
 from .utils.s3 import update_deals_last_sync_time
+from .utils.send_mail import send_email
 from .utils.snowflake_db import create_sf_connection, close_sf_connection
 
 sqs = boto3.client('sqs')
@@ -92,7 +93,20 @@ def handle_event(event):
             single_deal_fetch(event)
 
         elif event_job == 'MANUAL_SYNC':
-            sync_deals(event)
+            try:
+                sync_deals(event)
+            except Exception as e:
+                error_log = traceback.format_exc()
+                html_content = f'''
+                <h1>Hubspot Sync Failed for Deals</h1><br>
+                <b>Event {event}</b><br>
+                <h2>Error:</h2><br>
+                <b>{str(e)}</b><br>
+                <pre>{error_log}</pre>
+                '''
+                send_email(["Ramakrishna.Pinni@blend360.com"], subject="Hubspot Sync Failed error logs",
+                           content=html_content, content_type="html",
+                           email_cc_list=[], importance=True)
 
         elif event_job == 'BACK_FILL_FETCH':
             back_fill_deals(event)

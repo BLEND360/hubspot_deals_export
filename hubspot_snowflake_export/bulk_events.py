@@ -241,12 +241,12 @@ def sync_deals(event):
         print("done line items insert")
 
         # #####################################################################
-        return "success"
     except Exception as ex:
         print(traceback.format_exc())
         sf_conn.rollback()
         print(f"Failed Sync - {ex}")
-        return "failed"
+        raise
+
     finally:
         sf_conn.commit()
         close_sf_connection(sf_conn)
