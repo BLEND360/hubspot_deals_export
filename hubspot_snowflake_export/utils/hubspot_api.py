@@ -39,7 +39,10 @@ deal_properties = [
     "solution_lead",
 ]
 
-def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z", use_backup=False, deal_ids = []):
+def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z", use_backup=False,
+                                   deal_ids=None):
+    if deal_ids is None:
+        deal_ids = []
     if use_backup:
         with open("deals.json", "r") as f:
             return json.load(f)
@@ -60,7 +63,7 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
             {
                 "propertyName": "hs_object_id",
                 "operator": "IN",
-                "value": deal_ids
+                "values": deal_ids
             }
         )
     if start_date_time:
