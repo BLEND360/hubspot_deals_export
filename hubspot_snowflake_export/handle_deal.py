@@ -160,7 +160,7 @@ def handle_deal_lead_details(deal_owner):
         owner_details = get_owner_details(deal_owner)
         owner_details = parse_owner_details(owner_details)
         return owner_details
-    return None
+    return {}
 
 
 def parse_owner_details(owner_details):

@@ -17,6 +17,7 @@ sqs = boto3.client('sqs')
 
 
 def handle_api_request(event):
+    print("===>", event)
     headers = event.get('headers', {})
     isHubspotEvent = '/hubspot/deals/sync' in event.get('path', "")
     authorization_header = headers.get('Auth-Key')
@@ -59,15 +60,20 @@ def handle_api_request(event):
                 "body": json.dumps({"message": f"Already Sync In Progress"})
             }
 
+        event_body = event.get('body', None)
+        sync_from_ = json.loads(event_body).get('sync_from', None)
+        if not sync_from_:
+            sync_from_ = "2024-01-01T00:00:00+00:00"
+
         lambda_client = boto3.client('lambda')
         lambda_client.invoke(
             FunctionName=f"arn:aws:lambda:us-east-1:{AWS_ACCOUNT_ID}:function:hubspot-snowflake-export",
             InvocationType="Event",
             Payload=json.dumps(
-                {'event': 'MANUAL_SYNC', 'sync_from': "2024-01-01 00:00:00.000+00:00"})
+                {'event': 'MANUAL_SYNC', 'sync_from': sync_from_})
         )
 
-        print("Invoked Lambda with Event", {'event': 'MANUAL_SYNC', 'sync_from': "2024-01-01 00:00:00.000+00:00"})
+        print("Invoked Lambda with Event", {'event': 'MANUAL_SYNC', 'sync_from': sync_from_})
         return {
             "statusCode": 202,
             "body": json.dumps({"message": f"Accepted - Sync for all Deal"})

@@ -20,17 +20,19 @@ def sync_deals(event):
         return
 
     if sync_from:
-        parsed_datetime = datetime.strptime(sync_from, "%Y-%m-%d %H:%M:%S.%f%z")
-        formatted_datetime = parsed_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
+        parsed_datetime = datetime.strptime(sync_from, "%Y-%m-%dT%H:%M:%S%z")
+        desired_timezone = pytz.timezone('UTC')
+        converted_datetime = parsed_datetime.astimezone(desired_timezone)
+        formatted_datetime = converted_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
     else:
         formatted_datetime = None
 
     updated_deals_since = fetch_updated_or_created_deals(start_date_time=formatted_datetime, deal_ids=deal_ids)
     if len(updated_deals_since) <= 0:
-        print(f"No Deals Updated/Created Since: {sync_from}")
+        print(f"No Deals Updated/Created Since: {formatted_datetime}")
         return "success"
 
-    print(f"Deals Updated/Created Since: {sync_from} - {len(updated_deals_since)}")
+    print(f"Deals Updated/Created Since: {formatted_datetime} - {len(updated_deals_since)}")
     deals_with_companies = get_all_companies()
     print("done company details")
     pipeline_stages = get_all_stages()
