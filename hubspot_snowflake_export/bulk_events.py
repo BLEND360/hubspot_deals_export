@@ -29,8 +29,10 @@ def sync_deals(event):
 
     if deal_ids:
         deal_ids = list(set(deal_ids))
-
-    updated_deals_since = fetch_updated_or_created_deals(start_date_time=formatted_datetime, deal_ids=deal_ids)
+    deals_as_batch_of_100 =  [deal_ids[i:i + 100] for i in range(0, len(deal_ids), 100)]
+    updated_deals_since = []
+    for deal_ids_batch in deals_as_batch_of_100:
+        updated_deals_since.extend(fetch_updated_or_created_deals(start_date_time=formatted_datetime, deal_ids=deal_ids_batch))
     if len(updated_deals_since) <= 0:
         print(f"No Deals Updated/Created Since: {formatted_datetime}")
         return "success"
