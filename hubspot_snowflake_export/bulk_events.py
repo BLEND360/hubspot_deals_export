@@ -18,24 +18,25 @@ def sync_deals(event):
     if not sync_from and not deal_ids:
         print("Missing sync_from / deal_ids in the request. Exiting.")
         return
-
+    formatted_datetime = None
+    updated_deals_since = []
     if sync_from:
         parsed_datetime = datetime.strptime(sync_from, "%Y-%m-%dT%H:%M:%S%z")
         desired_timezone = pytz.timezone('UTC')
         converted_datetime = parsed_datetime.astimezone(desired_timezone)
         formatted_datetime = converted_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
-    else:
-        formatted_datetime = None
+        updated_deals_since = fetch_updated_or_created_deals(start_date_time=formatted_datetime)
 
-    if deal_ids:
+    elif deal_ids:
         deal_ids = list(set(deal_ids))
-    deals_as_batch_of_100 =  [deal_ids[i:i + 100] for i in range(0, len(deal_ids), 100)]
-    updated_deals_since = []
-    for deal_ids_batch in deals_as_batch_of_100:
-        updated_deals_since.extend(fetch_updated_or_created_deals(start_date_time=formatted_datetime, deal_ids=deal_ids_batch))
+        deals_as_batch_of_100 =  [deal_ids[i:i + 100] for i in range(0, len(deal_ids), 100)]
+        for deal_ids_batch in deals_as_batch_of_100:
+            updated_deals_since.extend(fetch_updated_or_created_deals(start_date_time=formatted_datetime, deal_ids=deal_ids_batch))
+
+
     if len(updated_deals_since) <= 0:
         print(f"No Deals Updated/Created Since: {formatted_datetime}")
-        return "success"
+        return
 
     print(f"Deals Updated/Created Since: {formatted_datetime} - {len(updated_deals_since)}")
     deals_with_companies = get_all_companies()
