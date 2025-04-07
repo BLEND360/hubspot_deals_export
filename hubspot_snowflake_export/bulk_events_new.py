@@ -203,7 +203,7 @@ def sync_deals(event):
             %(DEAL_UPDATED_ON)s, %(IS_ARCHIVED)s, %(COMPANY_DOMAIN)s, %(NS_PROJECT_ID)s,
             %(DEAL_AMOUNT_IN_COMPANY_CURRENCY)s, %(DEAL_TYPE)s, CURRENT_TIMESTAMP(), %(WORK_AHEAD)s,
             CURRENT_TIMESTAMP(), %(DELIVERY_LEAD_ID)s, %(DELIVERY_LEAD_EMAIL)s, %(DELIVERY_LEAD_NAME)s,
-            %(SOLUTION_LEAD_ID)s, %(SOLUTION_LEAD_EMAIL)s, %(SOLUTION_LEAD_NAME)s), %(REVENUE_TYPE)s)""",
+            %(SOLUTION_LEAD_ID)s, %(SOLUTION_LEAD_EMAIL)s, %(SOLUTION_LEAD_NAME)s, %(REVENUE_TYPE)s)""",
                               raw_deals)
         # upsert from temp table to main table
         print("Upserting data into main table")
@@ -243,7 +243,7 @@ def sync_deals(event):
                 target.DELIVERY_LEAD_NAME = source.DELIVERY_LEAD_NAME,
                 target.SOLUTION_LEAD_ID = source.SOLUTION_LEAD_ID,
                 target.SOLUTION_LEAD_EMAIL = source.SOLUTION_LEAD_EMAIL,
-                target.SOLUTION_LEAD_NAME = source.SOLUTION_LEAD_NAME
+                target.SOLUTION_LEAD_NAME = source.SOLUTION_LEAD_NAME,
                 target.REVENUE_TYPE = source.REVENUE_TYPE
             WHEN NOT MATCHED THEN
                 INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME,
