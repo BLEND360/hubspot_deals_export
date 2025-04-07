@@ -24,7 +24,7 @@ def lambda_handler(event, context):
     deal_ids = list(set(deal_ids))
     print(f"DEBUG: DEALS AFTER SET: {len(deal_ids)}")
 
-    if deal_ids and len(deal_ids) < 20:
+    if deal_ids and len(deal_ids) == 1:
         sf_conn = create_sf_connection(SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE)
         sf_cursor = sf_conn.cursor()
         for deal_id in deal_ids:
