@@ -731,7 +731,28 @@ def get_owners_by_ids_users_search(owner_ids):
                                           "archived": False}
 
     missed_owner_ids = set(owner_ids) - set(owner_details.keys())
-    if len(missed_owner_ids) > 0:
+    if len(missed_owner_ids) == 1:
+        print("missed_owner_ids", missed_owner_ids)
+        missed_owner_id = list(missed_owner_ids)[0]
+        missed_owner_details = call_owner_api(missed_owner_id, True)
+        if missed_owner_details:
+            name = ""
+            if missed_owner_details["firstName"] and missed_owner_details["lastName"]:
+                name = missed_owner_details["firstName"] + " " + missed_owner_details["lastName"]
+            elif missed_owner_details["firstName"]:
+                name = missed_owner_details["firstName"]
+            elif missed_owner_details["lastName"]:
+                name = missed_owner_details["lastName"]
+            if not name:
+                name = ' '.join(missed_owner_details["email"].split('@')[0].split('.')).title() if missed_owner_details[
+                    "email"] else None
+            owner_details[missed_owner_id] = {"id": missed_owner_id,
+                                              "name": name,
+                                              "email": missed_owner_details["email"],
+                                              "archived": True}
+        else:
+            print(f"Owner not found in archived owners also: {missed_owner_id}")
+    if len(missed_owner_ids) > 1:
         print("missed_owner_ids", missed_owner_ids)
         missed_owners = get_all_owners(use_backup=False, archived_types=["true"])
         for missed_owner_id in missed_owner_ids:
