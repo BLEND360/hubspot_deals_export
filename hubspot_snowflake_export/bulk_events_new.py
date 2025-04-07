@@ -1,14 +1,30 @@
 import json
 import traceback
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
 import pytz
 
 from .utils.config import SF_DEALS_TABLE, SF_LINE_ITEMS_TABLE, SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, \
     SF_ROLE
-from .utils.hubspot_api import fetch_updated_or_created_deals, get_all_companies, get_all_stages, get_all_owners, \
-    get_all_line_items
+from .utils.hubspot_api import fetch_updated_or_created_deals, get_all_stages, get_all_owners, \
+    get_associated_companies_of_deals, \
+    get_associated_line_items_of_deals, get_line_items_by_ids_batch, get_companies_by_ids_batch, \
+    get_owners_by_ids_users_search
 from .utils.snowflake_db import close_sf_connection, create_sf_connection
+
+def get_list_of_owner_ids(deals):
+    owner_ids = set()
+    for deal in deals:
+        if deal['properties']['hubspot_owner_id']:
+            owner_ids.add(deal['properties']['hubspot_owner_id'])
+        if deal['properties']['delivery_lead']:
+            owner_ids.add(deal['properties']['delivery_lead'])
+        if deal['properties']['solution_lead']:
+            owner_ids.add(deal['properties']['solution_lead'])
+        if deal['properties']['hs_all_collaborator_owner_ids']:
+            owner_ids.update(deal['properties']['hs_all_collaborator_owner_ids'].split(';'))
+    return list(owner_ids)
 
 
 def sync_deals(event):
@@ -37,15 +53,33 @@ def sync_deals(event):
     if len(updated_deals_since) <= 0:
         print(f"No Deals Updated/Created Since: {formatted_datetime}")
         return
-
+    list_of_owner_ids = get_list_of_owner_ids(updated_deals_since)
     print(f"Deals Updated/Created Since: {formatted_datetime} - {len(updated_deals_since)}")
-    deals_with_companies = get_all_companies()
+    deal_ids = [deal['id'] for deal in updated_deals_since]
+    deals_to_associated_company_ids = get_associated_companies_of_deals(deal_ids)
+    # company_id_to_deal_id_mapping = {v:k for k, v in deals_to_associated_company_ids.items()}
+    company_ids = list(set(deals_to_associated_company_ids.values()))
+    company_details = get_companies_by_ids_batch(company_ids)
+    deals_with_companies = {deal_id: company_details.get(deals_to_associated_company_ids.get(deal_id), {}) for deal_id in deal_ids}
+    # deals_with_companies = get_all_companies()
     print("done company details")
     pipeline_stages = get_all_stages()
     print("done pipeline stages")
-    owner_details = get_all_owners()
+    # owner_details = get_all_owners()
+    owner_details = get_owners_by_ids_users_search(owner_ids=list_of_owner_ids)
     print("done owner details")
-    deals_with_line_items = get_all_line_items()
+    deals_to_associated_line_item_ids = get_associated_line_items_of_deals(deal_ids)
+    line_item_id_to_deal_id_mapping = {}
+    for deal_id, line_item_ids in deals_to_associated_line_item_ids.items():
+        for line_item_id in line_item_ids:
+            line_item_id_to_deal_id_mapping[line_item_id] = deal_id
+    line_item_ids = list(set(line_item_id_to_deal_id_mapping.keys()))
+
+    # deals_with_line_items = get_all_line_items()
+    line_item_details = get_line_items_by_ids_batch(line_item_ids)
+    deals_with_line_items = defaultdict(list)
+    for line_item_id, details in line_item_details.items():
+        deals_with_line_items[line_item_id_to_deal_id_mapping[line_item_id]].append({**details, 'deal_id': line_item_id_to_deal_id_mapping[line_item_id]})
     print("done line items")
     line_items_deals = [deal_id for deal_id in deals_with_line_items.keys()]
     line_items = []
@@ -132,16 +166,16 @@ def sync_deals(event):
 
             # number_fields = ['COMPANY_ID', 'DURATION_IN_MONTHS', 'DEAL_AMOUNT_IN_COMPANY_CURRENCY']
             number_fields = [
-                "DURATION_IN_MONTHS",
-                "DEAL_AMOUNT_IN_COMPANY_CURRENCY",
-                "DEAL_OWNER_ID",
-                "COMPANY_ID",
-                "PIPELINE_ID",
-                "NS_PROJECT_ID",
-                "DELIVERY_LEAD_ID",
-                "SOLUTION_LEAD_ID"
-                # Add more if you know they are numeric
-            ]
+    "DURATION_IN_MONTHS",
+    "DEAL_AMOUNT_IN_COMPANY_CURRENCY",
+    "DEAL_OWNER_ID",
+    "COMPANY_ID",
+    "PIPELINE_ID",
+    "NS_PROJECT_ID",
+    "DELIVERY_LEAD_ID",
+    "SOLUTION_LEAD_ID"
+    # Add more if you know they are numeric
+]
             for field in number_fields:
                 if deal_data_raw.get(field) is not None and str(deal_data_raw.get(field)).strip() == '':
                     print(f"Field {field} is missing for Deal: {deal_id}, value is {deal_data_raw.get(field)}")
@@ -153,6 +187,9 @@ def sync_deals(event):
         sf_cursor.execute(f"CREATE OR REPLACE TEMPORARY TABLE DEALS_TEMP LIKE {SF_DEALS_TABLE}")
         # insert this data into temp table
         print("Inserting data into temp table")
+        # print("raw_deals", raw_deals)
+        with open('raw_deals.json', 'w') as f:
+            f.write(json.dumps(raw_deals, indent=4, default=str))
         sf_cursor.executemany("""INSERT INTO DEALS_TEMP (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID,
             DEAL_OWNER_EMAIL, DEAL_OWNER_NAME, DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME,
             DEAL_TO_COMPANY_ASSOCIATIONS, PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE,

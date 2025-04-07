@@ -3,7 +3,8 @@ import traceback
 
 import boto3
 
-from .bulk_events import sync_deals
+from .bulk_events_new import sync_deals as sync_deals_new
+from .bulk_events import sync_deals as sync_deals_old
 from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, schedule_fetch, handle_sync_status
 from .handle_deal import handle_deal
 from .hubspot_events import handle_webhook_from_hubspot
@@ -94,9 +95,10 @@ def handle_event(event):
 
         elif event_job == 'MANUAL_SYNC':
             try:
-                sync_deals(event)
+                sync_deals_new(event)
             except Exception as e:
                 error_log = traceback.format_exc()
+                print(error_log)
                 html_content = f'''
                 <h1>Hubspot Sync Failed for Deals</h1><br>
                 <b>Event {event}</b><br>
@@ -108,6 +110,22 @@ def handle_event(event):
                            content=html_content, content_type="html",
                            email_cc_list=[], importance=True)
 
+        elif event_job == 'MANUAL_SYNC_OLD':
+            try:
+                sync_deals_old(event)
+            except Exception as e:
+                error_log = traceback.format_exc()
+                print(error_log)
+                html_content = f'''
+                    <h1>Hubspot Sync Failed for Deals</h1><br>
+                    <b>Event {event}</b><br>
+                    <h2>Error:</h2><br>
+                    <b>{str(e)}</b><br>
+                    <pre>{error_log}</pre>
+                    '''
+                send_email(["Ramakrishna.Pinni@blend360.com"], subject="Hubspot Sync Failed error logs",
+                           content=html_content, content_type="html",
+                           email_cc_list=[], importance=True)
         elif event_job == 'BACK_FILL_FETCH':
             back_fill_deals(event)
 
