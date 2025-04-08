@@ -39,7 +39,7 @@ def lambda_handler(event, context):
                 <b>{str(e)}</b><br>
                 <pre>{error_log}</pre>
                 '''
-                send_email(["Ramakrishna.Pinni@blend360.com"], subject="Hubspot Sync Failed error logs",
+                send_email(["Ramakrishna.Pinni@blend360.com", "oveek.chatterjee@blend360.com", "Krishna.Undamatla@blend360.com"], subject="Hubspot Sync Failed error logs",
                            content=html_content, content_type="html",
                            email_cc_list=[], importance=True)
                 print(f"[Webhook] Deal sync failed for - {deal_id}")
@@ -56,7 +56,7 @@ def lambda_handler(event, context):
             <b>{str(e)}</b><br>
             <pre>{error_log}</pre>
             '''
-            send_email(["Ramakrishna.Pinni@blend360.com"], subject="Hubspot Sync Failed error logs",
+            send_email(["Ramakrishna.Pinni@blend360.com", "oveek.chatterjee@blend360.com", "Krishna.Undamatla@blend360.com"], subject="Hubspot Sync Failed error logs",
                        content=html_content, content_type="html",
                        email_cc_list=[], importance=True)
 
