@@ -9,7 +9,7 @@ from .events import single_deal_fetch, bulk_deals_fetch, back_fill_deals, schedu
 from .handle_deal import handle_deal
 from .hubspot_events import handle_webhook_from_hubspot
 from .utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE, API_AUTH_KEY, \
-    AWS_ACCOUNT_ID
+    AWS_ACCOUNT_ID, ENV_
 from .utils.hubspot_api import get_deal
 from .utils.s3 import update_deals_last_sync_time
 from .utils.send_mail import send_email
@@ -44,8 +44,22 @@ def handle_api_request(event):
                 "statusCode": 201,
                 "body": json.dumps({"message": f"Completed Sync for Deal: {deal_id}"})
             }
-        except Exception:
+        except Exception as e:
             close_sf_connection(sf_conn)
+            error_log = traceback.format_exc()
+            print(error_log)
+            html_content = f'''
+                                <h1>Hubspot Sync Failed for Deals</h1><br>
+                                <b>Event {event}</b><br>
+                                <h2>Error:</h2><br>
+                                <b>{str(e)}</b><br>
+                                <pre>{error_log}</pre>
+                            '''
+            send_email(
+                ["Ramakrishna.Pinni@blend360.com", "oveek.chatterjee@blend360.com", "Krishna.Undamatla@blend360.com"],
+                subject=f"[{ENV_.upper()}] Hubspot Sync Failed error logs",
+                content=html_content, content_type="html",
+                email_cc_list=[], importance=True)
             return {
                 "statusCode": 400,
                 "body": json.dumps({"message": "Failed to Sync Deal"})
@@ -106,7 +120,9 @@ def handle_event(event):
                 <b>{str(e)}</b><br>
                 <pre>{error_log}</pre>
                 '''
-                send_email(["Ramakrishna.Pinni@blend360.com"], subject="Hubspot Sync Failed error logs",
+                send_email(["Ramakrishna.Pinni@blend360.com", "oveek.chatterjee@blend360.com",
+                            "Krishna.Undamatla@blend360.com"],
+                           subject=f"[{ENV_.upper()}] Hubspot Sync Failed error logs",
                            content=html_content, content_type="html",
                            email_cc_list=[], importance=True)
 
@@ -123,7 +139,9 @@ def handle_event(event):
                     <b>{str(e)}</b><br>
                     <pre>{error_log}</pre>
                     '''
-                send_email(["Ramakrishna.Pinni@blend360.com"], subject="Hubspot Sync Failed error logs",
+                send_email(["Ramakrishna.Pinni@blend360.com", "oveek.chatterjee@blend360.com",
+                            "Krishna.Undamatla@blend360.com"],
+                           subject=f"[{ENV_.upper()}] Hubspot Sync Failed error logs",
                            content=html_content, content_type="html",
                            email_cc_list=[], importance=True)
         elif event_job == 'BACK_FILL_FETCH':

@@ -115,7 +115,7 @@ def handle_line_items(deal, sf_cursor):
                 sf_cursor.execute(f"""DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE LINE_ITEM_ID IN ({id_str})""")
                 return True
 
-            return check_line_items_updation(existing_line_items, line_items_data)
+            return
         else:
             if len(existing_line_items) > 0:
                 id_str = ', '.join(map(str, [item[0] for item in existing_line_items]))
@@ -243,7 +243,7 @@ def none_to_null(value):
 
 
 def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details, company_details, stage_details,
-                special_fields_updated_on, delivery_lead_details, solution_lead_details):
+                delivery_lead_details, solution_lead_details):
     company_name = None if not company_details else company_details['name'] if company_details['name'] else " ".join(
         company_details['domain'].split(".")[:-1]).title() if company_details['domain'] else None
     stage_name = next((stage['label'] for stage in stage_details if stage['id'] == deal_properties['dealstage']), None)
@@ -280,7 +280,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "NS_PROJECT_ID": deal_properties['ns_project_id__finance_only_'],
         "DEAL_AMOUNT_IN_COMPANY_CURRENCY": deal_properties['amount_in_home_currency'],
         "DEAL_TYPE": deal_properties['dealtype'],
-        "SPECIAL_FIELDS_UPDATED_ON": special_fields_updated_on,
+        "SPECIAL_FIELDS_UPDATED_ON": curr_time,
         "WORK_AHEAD": work_ahead,
         "LAST_REFRESHED_ON": curr_time,
         "DELIVERY_LEAD_ID": deal_properties['delivery_lead'],
@@ -289,6 +289,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "SOLUTION_LEAD_ID": deal_properties['solution_lead'],
         "SOLUTION_LEAD_EMAIL": solution_lead_details.get('email'),
         "SOLUTION_LEAD_NAME": solution_lead_details.get('name'),
+        "REVENUE_TYPE": deal_properties['revenue_type'],
     }
     deal_data = {key: none_to_null(value) for key, value in deal_data_raw.items()}
 
@@ -327,7 +328,8 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
                         {deal_data['DELIVERY_LEAD_NAME']} as DELIVERY_LEAD_NAME,
                         {deal_data['SOLUTION_LEAD_ID']} as SOLUTION_LEAD_ID,
                         {deal_data['SOLUTION_LEAD_EMAIL']} as SOLUTION_LEAD_EMAIL,
-                        {deal_data['SOLUTION_LEAD_NAME']} as SOLUTION_LEAD_NAME
+                        {deal_data['SOLUTION_LEAD_NAME']} as SOLUTION_LEAD_NAME,
+                        {deal_data['REVENUE_TYPE']} as REVENUE_TYPE
                     ) AS source
             ON (target.DEAL_ID = source.DEAL_ID)
             WHEN MATCHED THEN
@@ -363,10 +365,11 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
                     target.DELIVERY_LEAD_NAME = source.DELIVERY_LEAD_NAME,
                     target.SOLUTION_LEAD_ID = source.SOLUTION_LEAD_ID,
                     target.SOLUTION_LEAD_EMAIL = source.SOLUTION_LEAD_EMAIL,
-                    target.SOLUTION_LEAD_NAME = source.SOLUTION_LEAD_NAME
+                    target.SOLUTION_LEAD_NAME = source.SOLUTION_LEAD_NAME,
+                    target.REVENUE_TYPE = source.REVENUE_TYPE
             WHEN NOT MATCHED THEN
-                INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME, DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS, PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN, NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME)
-                VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID, source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME, source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID, source.PROJECT_START_DATE, source.PROJECT_CLOSE_DATE, source.ENGAGEMENT_TYPE, source.DURATION_IN_MONTHS, source.DEAL_COLLABORATORS, source.DEAL_CREATED_ON, source.DEAL_UPDATED_ON, source.IS_ARCHIVED, source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE, source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON, source.DELIVERY_LEAD_ID, source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID, source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME);
+                INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME, DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS, PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN, NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE)
+                VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID, source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME, source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID, source.PROJECT_START_DATE, source.PROJECT_CLOSE_DATE, source.ENGAGEMENT_TYPE, source.DURATION_IN_MONTHS, source.DEAL_COLLABORATORS, source.DEAL_CREATED_ON, source.DEAL_UPDATED_ON, source.IS_ARCHIVED, source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE, source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON, source.DELIVERY_LEAD_ID, source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID, source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE);
         """
 
     sf_cursor.execute(merge_sql)
@@ -449,7 +452,6 @@ def handle_deal(deal, sf_cursor):
 
         print(f"Upserting Deal {deal_id} - {deal_properties['dealname']}")
 
-        does_line_items_updated = handle_line_items(deal, sf_cursor)
         company_associations = handle_company_details(deal_id, sf_cursor)
         owner_details = handle_deal_owner_details(deal_owner, sf_cursor)
         delivery_lead_details = handle_deal_lead_details(deal_properties['delivery_lead'])
@@ -461,13 +463,16 @@ def handle_deal(deal, sf_cursor):
         deals_request = create_deal_update_request(owner_details, collaborators_details,
                                                    company_associations.get('associations', None))
 
-        special_fields_updated_on = handle_special_fields(deal_id, deal_properties, does_line_items_updated, sf_cursor)
+        # special_fields_updated_on = handle_special_fields(deal_id, deal_properties, does_line_items_updated, sf_cursor)
         upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details,
                     company_associations.get('company_details', None),
-                    stage_details, special_fields_updated_on, delivery_lead_details, solution_lead_details)
+                    stage_details, delivery_lead_details, solution_lead_details)
+        handle_line_items(deal, sf_cursor)
+
     except Exception as ex:
         traceback.print_exc()
         print(f"Failed to updated deal - {deal['id']}, Exception: {ex}")
+        raise
 
 
 def handle_deal_upsert(deal, sf_cursor):

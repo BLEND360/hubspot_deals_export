@@ -161,26 +161,26 @@ Resources:
             MaximumBatchingWindowInSeconds: 20
             Enabled: true
 
-  #Rule - to run cron job#
-  HubspotDealsExportScheduleRule:
-    Type: AWS::Events::Rule
-    Properties:
-      ScheduleExpression: 'cron(0/5 10-3 ? * * *)'
-      State: 'ENABLED'
-      Name: 'HubspotDealsExportScheduleRule'
-      Targets:
-        - Arn: !GetAtt HubspotDealsExportToSnowflake.Arn
-          Id: "ScheduleJobForHubspotDealsExport"
-          Input: '{"event": "SCHEDULE_FETCH"}'
+#  #Rule - to run cron job#
+#  HubspotDealsExportScheduleRule:
+#    Type: AWS::Events::Rule
+#    Properties:
+#      ScheduleExpression: 'cron(0/5 10-3 ? * * *)'
+#      State: 'ENABLED'
+#      Name: 'HubspotDealsExportScheduleRule'
+#      Targets:
+#        - Arn: !GetAtt HubspotDealsExportToSnowflake.Arn
+#          Id: "ScheduleJobForHubspotDealsExport"
+#          Input: '{"event": "SCHEDULE_FETCH"}'
 
-  #Lambda Invoke Permission - to run cron job#
-  LambdaInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: 'lambda:InvokeFunction'
-      FunctionName: !Ref HubspotDealsExportToSnowflake
-      Principal: 'events.amazonaws.com'
-      SourceArn: !GetAtt HubspotDealsExportScheduleRule.Arn
+#  #Lambda Invoke Permission - to run cron job#
+#  LambdaInvokePermission:
+#    Type: AWS::Lambda::Permission
+#    Properties:
+#      Action: 'lambda:InvokeFunction'
+#      FunctionName: !Ref HubspotDealsExportToSnowflake
+#      Principal: 'events.amazonaws.com'
+#      SourceArn: !GetAtt HubspotDealsExportScheduleRule.Arn
 
 
   SyncHubspotDealsAPI:

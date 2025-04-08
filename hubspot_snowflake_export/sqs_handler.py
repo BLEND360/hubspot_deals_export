@@ -3,7 +3,7 @@ import traceback
 
 from hubspot_snowflake_export.bulk_events import sync_deals
 from hubspot_snowflake_export.handle_deal import handle_deal
-from hubspot_snowflake_export.utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE
+from hubspot_snowflake_export.utils.config import SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE, ENV_
 from hubspot_snowflake_export.utils.hubspot_api import get_deal
 from hubspot_snowflake_export.utils.s3 import update_deals_last_sync_time
 from hubspot_snowflake_export.utils.send_mail import send_email
@@ -24,7 +24,7 @@ def lambda_handler(event, context):
     deal_ids = list(set(deal_ids))
     print(f"DEBUG: DEALS AFTER SET: {len(deal_ids)}")
 
-    if deal_ids and len(deal_ids) < 20:
+    if deal_ids and len(deal_ids) == 1:
         sf_conn = create_sf_connection(SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, SF_ROLE)
         sf_cursor = sf_conn.cursor()
         for deal_id in deal_ids:
@@ -39,7 +39,7 @@ def lambda_handler(event, context):
                 <b>{str(e)}</b><br>
                 <pre>{error_log}</pre>
                 '''
-                send_email(["Ramakrishna.Pinni@blend360.com"], subject="Hubspot Sync Failed error logs",
+                send_email(["Ramakrishna.Pinni@blend360.com", "oveek.chatterjee@blend360.com", "Krishna.Undamatla@blend360.com"], subject=f"[{ENV_.upper()}] Hubspot Sync Failed error logs",
                            content=html_content, content_type="html",
                            email_cc_list=[], importance=True)
                 print(f"[Webhook] Deal sync failed for - {deal_id}")
@@ -56,7 +56,7 @@ def lambda_handler(event, context):
             <b>{str(e)}</b><br>
             <pre>{error_log}</pre>
             '''
-            send_email(["Ramakrishna.Pinni@blend360.com"], subject="Hubspot Sync Failed error logs",
+            send_email(["Ramakrishna.Pinni@blend360.com", "oveek.chatterjee@blend360.com", "Krishna.Undamatla@blend360.com"], subject=f"[{ENV_.upper()}] Hubspot Sync Failed error logs",
                        content=html_content, content_type="html",
                        email_cc_list=[], importance=True)
 
