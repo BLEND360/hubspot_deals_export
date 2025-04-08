@@ -115,7 +115,7 @@ def handle_line_items(deal, sf_cursor):
                 sf_cursor.execute(f"""DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE LINE_ITEM_ID IN ({id_str})""")
                 return True
 
-            return check_line_items_updation(existing_line_items, line_items_data)
+            return
         else:
             if len(existing_line_items) > 0:
                 id_str = ', '.join(map(str, [item[0] for item in existing_line_items]))
@@ -243,7 +243,7 @@ def none_to_null(value):
 
 
 def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details, company_details, stage_details,
-                special_fields_updated_on, delivery_lead_details, solution_lead_details):
+                delivery_lead_details, solution_lead_details):
     company_name = None if not company_details else company_details['name'] if company_details['name'] else " ".join(
         company_details['domain'].split(".")[:-1]).title() if company_details['domain'] else None
     stage_name = next((stage['label'] for stage in stage_details if stage['id'] == deal_properties['dealstage']), None)
@@ -280,7 +280,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "NS_PROJECT_ID": deal_properties['ns_project_id__finance_only_'],
         "DEAL_AMOUNT_IN_COMPANY_CURRENCY": deal_properties['amount_in_home_currency'],
         "DEAL_TYPE": deal_properties['dealtype'],
-        "SPECIAL_FIELDS_UPDATED_ON": special_fields_updated_on,
+        "SPECIAL_FIELDS_UPDATED_ON": curr_time,
         "WORK_AHEAD": work_ahead,
         "LAST_REFRESHED_ON": curr_time,
         "DELIVERY_LEAD_ID": deal_properties['delivery_lead'],
@@ -452,7 +452,6 @@ def handle_deal(deal, sf_cursor):
 
         print(f"Upserting Deal {deal_id} - {deal_properties['dealname']}")
 
-        does_line_items_updated = handle_line_items(deal, sf_cursor)
         company_associations = handle_company_details(deal_id, sf_cursor)
         owner_details = handle_deal_owner_details(deal_owner, sf_cursor)
         delivery_lead_details = handle_deal_lead_details(deal_properties['delivery_lead'])
@@ -464,10 +463,12 @@ def handle_deal(deal, sf_cursor):
         deals_request = create_deal_update_request(owner_details, collaborators_details,
                                                    company_associations.get('associations', None))
 
-        special_fields_updated_on = handle_special_fields(deal_id, deal_properties, does_line_items_updated, sf_cursor)
+        # special_fields_updated_on = handle_special_fields(deal_id, deal_properties, does_line_items_updated, sf_cursor)
         upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details,
                     company_associations.get('company_details', None),
-                    stage_details, special_fields_updated_on, delivery_lead_details, solution_lead_details)
+                    stage_details, delivery_lead_details, solution_lead_details)
+        handle_line_items(deal, sf_cursor)
+
     except Exception as ex:
         traceback.print_exc()
         print(f"Failed to updated deal - {deal['id']}, Exception: {ex}")
