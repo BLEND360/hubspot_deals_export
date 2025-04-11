@@ -158,7 +158,7 @@ Resources:
           Properties:
             Queue: !GetAtt HubspotWebhookMessages.Arn
             BatchSize: 1000
-            MaximumBatchingWindowInSeconds: 20
+            MaximumBatchingWindowInSeconds: 15
             Enabled: true
 
 #  #Rule - to run cron job#
