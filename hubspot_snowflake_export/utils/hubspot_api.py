@@ -57,7 +57,7 @@ def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_af
         {
             "propertyName": "pipeline",
             "operator": "IN",
-            "values": ["74948272", "35923868", "663516528"]
+            "values": ["74948272", "35923868", "663516528", "45724251"]
         }
     ]
     if len(deal_ids) > 0:
