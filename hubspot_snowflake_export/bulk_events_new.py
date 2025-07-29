@@ -148,7 +148,7 @@ def sync_deals(event):
                 "IS_ARCHIVED": False,
                 "COMPANY_DOMAIN": company_details.get('domain'),
                 "NS_PROJECT_ID": deal_properties['ns_project_id__finance_only_'],
-                "DEAL_AMOUNT_IN_COMPANY_CURRENCY": deal_properties['amount_in_home_currency'],
+                "DEAL_AMOUNT_IN_COMPANY_CURRENCY": deal_properties['amount'],
                 "DEAL_TYPE": deal_properties['dealtype'],
                 "SPECIAL_FIELDS_UPDATED_ON": datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ'),
                 "WORK_AHEAD": work_ahead,

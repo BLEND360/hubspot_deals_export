@@ -39,7 +39,8 @@ deal_properties = [
     "delivery_lead",
     "solution_lead",
     "revenue_type",
-    "deal_currency_code"
+    "deal_currency_code",
+    "amount"
 ]
 
 def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z", use_backup=False,

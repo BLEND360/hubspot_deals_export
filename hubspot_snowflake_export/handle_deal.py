@@ -278,7 +278,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "IS_ARCHIVED": False,
         "COMPANY_DOMAIN": company_details['domain'] if company_details is not None else None,
         "NS_PROJECT_ID": deal_properties['ns_project_id__finance_only_'],
-        "DEAL_AMOUNT_IN_COMPANY_CURRENCY": deal_properties['amount_in_home_currency'],
+        "DEAL_AMOUNT_IN_COMPANY_CURRENCY": deal_properties['amount'],
         "DEAL_TYPE": deal_properties['dealtype'],
         "SPECIAL_FIELDS_UPDATED_ON": curr_time,
         "WORK_AHEAD": work_ahead,
@@ -431,7 +431,7 @@ def handle_special_fields(deal_id, updated_deal_properties, does_line_items_upda
 
     updated_deal_fields = {
         'DEAL_ID': deal_id,
-        'DEAL_AMOUNT_IN_COMPANY_CURRENCY': updated_deal_properties['amount_in_home_currency'],
+        'DEAL_AMOUNT_IN_COMPANY_CURRENCY': updated_deal_properties['amount'],
         'ENGAGEMENT_TYPE': updated_deal_properties['engagement_type__cloned_'],
         'PROJECT_START_DATE': updated_deal_properties['expected_project_start_date'],
         'DURATION_IN_MONTHS': updated_deal_properties['expected_project_duration_in_months']
