@@ -83,14 +83,14 @@ def handle_line_items(deal, sf_cursor):
         if line_item_ids and len(line_item_ids) > 0:
             line_items_data = get_line_items_by_ids(line_item_ids)
             values_str = ", ".join([
-                f"('{none_to_null_(item['id'])}', '{none_to_null_(item['properties']['name'])}', {none_to_null_(item['properties'].get('price', 0))}, {none_to_null_(item['properties'].get('quantity', 0))}, {none_to_null_(item['properties'].get('amount', 0))}, '{none_to_null_(item['createdAt'])}', '{none_to_null_(item['updatedAt'])}', '{none_to_null_(deal['id'])}')"
+                f"('{none_to_null_(item['id'])}', '{none_to_null_(item['properties']['name'])}', {none_to_null_(item['properties'].get('price', 0))}, {none_to_null_(item['properties'].get('quantity', 0))}, {none_to_null_(item['properties'].get('amount', 0))}, '{none_to_null_(item['createdAt'])}', '{none_to_null_(item['updatedAt'])}', '{none_to_null_(deal['id'])}', '{none_to_null_(item['properties'].get('hs_line_item_currency_code', 'USD'))}')"
                 for item in line_items_data])
             upsert_query = f"""
             MERGE INTO {SF_LINE_ITEMS_TABLE} AS target
             USING (
                 SELECT * FROM VALUES
                 {values_str}
-            ) AS source(LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID)
+            ) AS source(LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID, CURRENCY)
             ON target.LINE_ITEM_ID = source.LINE_ITEM_ID and target.DEAL_ID = source.DEAL_ID
             WHEN MATCHED THEN
                 UPDATE SET
@@ -99,10 +99,11 @@ def handle_line_items(deal, sf_cursor):
                     target.QUANTITY = source.QUANTITY,
                     target.AMOUNT = source.AMOUNT,
                     target.CREATED_ON = source.CREATED_ON,
-                    target.UPDATED_ON = source.UPDATED_ON
+                    target.UPDATED_ON = source.UPDATED_ON,
+                    target.CURRENCY = source.CURRENCY
             WHEN NOT MATCHED THEN
-                INSERT (LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID)
-                VALUES (source.LINE_ITEM_ID, source.NAME, source.PRICE, source.QUANTITY, source.AMOUNT, source.CREATED_ON, source.UPDATED_ON, source.DEAL_ID);
+                INSERT (LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID, CURRENCY)
+                VALUES (source.LINE_ITEM_ID, source.NAME, source.PRICE, source.QUANTITY, source.AMOUNT, source.CREATED_ON, source.UPDATED_ON, source.DEAL_ID, source.CURRENCY);
             """
             sf_cursor.execute(upsert_query)
             print(f"Upserted line items")

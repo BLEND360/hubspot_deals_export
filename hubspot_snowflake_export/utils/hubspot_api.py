@@ -240,7 +240,8 @@ def get_line_items_by_ids(line_item_ids):
             "name",
             "quantity",
             "price",
-            "amount"
+            "amount",
+            "hs_line_item_currency_code"
         ]
     })
     headers = {
@@ -673,7 +674,8 @@ def get_line_items_by_ids_batch(line_item_ids):
                 "name",
                 "amount",
                 "quantity",
-                "price"
+                "price",
+                "hs_line_item_currency_code"
             ]
         })
         data = call_api("POST", url, payload=payload)
@@ -684,7 +686,8 @@ def get_line_items_by_ids_batch(line_item_ids):
                                                        "quantity": line_item["properties"]["quantity"],
                                                        "price": line_item["properties"]["price"],
                                                        "updated_at": line_item["updatedAt"],
-                                                       "created_at": line_item["createdAt"]
+                                                       "created_at": line_item["createdAt"],
+                                                       "currency": line_item["properties"].get("hs_line_item_currency_code", "USD")
                                                   }
     return line_item_details
 
