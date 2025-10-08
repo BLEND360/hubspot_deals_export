@@ -120,7 +120,8 @@ def sync_deals(event):
                 "WORK_AHEAD": work_ahead,
                 "LAST_REFRESHED_ON": curr_time,
                 "REVENUE_TYPE": deal_properties['revenue_type'],
-                "CURRENCY": deal_properties.get('deal_currency_code', 'USD')
+                "CURRENCY": deal_properties.get('deal_currency_code', 'USD'),
+                "BOOK_LEADS_2026": deal_properties.get('n2026_book')
             }
 
             timestamp_fields = [
@@ -161,7 +162,7 @@ def sync_deals(event):
             DURATION_IN_MONTHS, DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN,
             NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD,
             LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID,
-            SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY)
+            SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026)
              VALUES 
             (%(DEAL_ID)s, %(DEAL_NAME)s, %(DEAL_OWNER)s, %(DEAL_OWNER_ID)s, %(DEAL_OWNER_EMAIL)s,
             %(DEAL_OWNER_NAME)s, %(DEAL_STAGE_ID)s, %(DEAL_STAGE_NAME)s, %(COMPANY_ID)s, %(COMPANY_NAME)s,
@@ -170,7 +171,7 @@ def sync_deals(event):
             %(DEAL_UPDATED_ON)s, %(IS_ARCHIVED)s, %(COMPANY_DOMAIN)s, %(NS_PROJECT_ID)s,
             %(DEAL_AMOUNT_IN_COMPANY_CURRENCY)s, %(DEAL_TYPE)s, CURRENT_TIMESTAMP(), %(WORK_AHEAD)s,
             CURRENT_TIMESTAMP(), %(DELIVERY_LEAD_ID)s, %(DELIVERY_LEAD_EMAIL)s, %(DELIVERY_LEAD_NAME)s,
-            %(SOLUTION_LEAD_ID)s, %(SOLUTION_LEAD_EMAIL)s, %(SOLUTION_LEAD_NAME)s, %(REVENUE_TYPE)s, %(CURRENCY)s)""",
+            %(SOLUTION_LEAD_ID)s, %(SOLUTION_LEAD_EMAIL)s, %(SOLUTION_LEAD_NAME)s, %(REVENUE_TYPE)s, %(CURRENCY)s, %(BOOK_LEADS_2026)s)""",
                               raw_deals)
         # upsert from temp table to main table
         print("Upserting data into main table")
@@ -212,7 +213,8 @@ def sync_deals(event):
                 target.SOLUTION_LEAD_EMAIL = source.SOLUTION_LEAD_EMAIL,
                 target.SOLUTION_LEAD_NAME = source.SOLUTION_LEAD_NAME,
                 target.REVENUE_TYPE = source.REVENUE_TYPE,
-                target.CURRENCY = source.CURRENCY
+                target.CURRENCY = source.CURRENCY,
+                target.BOOK_LEADS_2026 = source.BOOK_LEADS_2026
             WHEN NOT MATCHED THEN
                 INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME,
                 DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS,
@@ -220,7 +222,7 @@ def sync_deals(event):
                 DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN, NS_PROJECT_ID,
                 DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON,
                 DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL,
-                SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY)
+                SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026)
                 VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID,
                 source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME,
                 source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID,
@@ -229,7 +231,7 @@ def sync_deals(event):
                 source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE,
                 source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON, source.DELIVERY_LEAD_ID,
                 source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID,
-                source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE, source.CURRENCY)
+                source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE, source.CURRENCY, source.BOOK_LEADS_2026)
         """
                           )
         print(f"Done - Deals Updated/Created Since: {sync_from}")
