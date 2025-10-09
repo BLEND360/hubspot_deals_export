@@ -292,7 +292,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "SOLUTION_LEAD_NAME": solution_lead_details.get('name'),
         "REVENUE_TYPE": deal_properties['revenue_type'],
         "CURRENCY": deal_properties['deal_currency_code'],
-        "BOOK_LEADS_2026": deal_properties.get('n2026_book')
+        "BOOK_LEADS_2026": deal_properties.get('n2026_book').replace("'", "''")
     }
     deal_data = {key: none_to_null(value) for key, value in deal_data_raw.items()}
 
