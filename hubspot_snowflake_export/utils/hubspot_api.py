@@ -41,7 +41,8 @@ deal_properties = [
     "revenue_type",
     "deal_currency_code",
     "amount",
-    "n2026_book"
+    "n2026_book",
+    "offering"
 ]
 
 def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z", use_backup=False,
