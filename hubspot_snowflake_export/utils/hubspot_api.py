@@ -42,7 +42,9 @@ deal_properties = [
     "deal_currency_code",
     "amount",
     "n2026_book",
-    "offering"
+    "offering",
+    "description",
+    "tech_involved"
 ]
 
 def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z", use_backup=False,
@@ -771,7 +773,5 @@ def get_owners_by_ids_users_search(owner_ids):
                                                   "archived": True}
             else:
                 print(f"Owner not found in archived owners also: {missed_owner_id}")
-    # with open("owners2.json", "w") as f:
-    #     f.write(json.dumps(owner_details, indent=4))
     return owner_details
 
