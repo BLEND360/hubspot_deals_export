@@ -130,7 +130,7 @@ def sync_deals(event):
                 "WORK_AHEAD": work_ahead,
                 "LAST_REFRESHED_ON": curr_time,
                 "REVENUE_TYPE": deal_properties['revenue_type'],
-                "CURRENCY": deal_properties.get('deal_currency_code', 'USD'),
+                "CURRENCY": deal_properties.get('deal_currency_code') or 'USD',
                 "BOOK_LEADS_2026": deal_properties.get('n2026_book'),
                 "BOOK_2026_EMAIL": get_2026_book_lead_email(deal_properties.get('n2026_book')),
                 "OFFERING": deal_properties.get('offering'),

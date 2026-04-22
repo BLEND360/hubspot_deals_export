@@ -292,7 +292,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "SOLUTION_LEAD_EMAIL": solution_lead_details.get('email'),
         "SOLUTION_LEAD_NAME": solution_lead_details.get('name'),
         "REVENUE_TYPE": deal_properties['revenue_type'],
-        "CURRENCY": deal_properties.get('deal_currency_code', 'USD'),
+        "CURRENCY": deal_properties.get('deal_currency_code') or 'USD',
         "BOOK_LEADS_2026": deal_properties.get('n2026_book').replace("'", "''") if deal_properties.get('n2026_book') else None,
         "BOOK_2026_EMAIL": get_2026_book_lead_email(deal_properties.get('n2026_book')),
         "OFFERING": deal_properties.get('offering').replace("'", "''") if deal_properties.get('offering') else None,
