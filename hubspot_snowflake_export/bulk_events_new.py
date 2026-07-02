@@ -160,12 +160,18 @@ def sync_deals(event):
                 "BOOK_2026_EMAIL": get_2026_book_lead_email(deal_properties.get('n2026_book')),
                 "OFFERING": deal_properties.get('offering'),
                 "DESCRIPTION": deal_properties.get('description'),
-                "TECH_INVOLVED": deal_properties.get('tech_involved')
+                "TECH_INVOLVED": deal_properties.get('tech_involved'),
+                "PRIMARY_ENTITY": deal_properties.get('primary_entity'),
+                "PROJECT_END_DATE": deal_properties.get('est__project_end_date__cloned_'),
+                "SALES_DECKS_PRESENTATIONS": deal_properties.get('sales_decks__presentations'),
+                "MSA_PAYMENT_TERMS": deal_properties.get('msa_payment_terms'),
+                "DEAL_REGION": deal_properties.get('deal_region')
             }
 
             timestamp_fields = [
                 'PROJECT_START_DATE', 'PROJECT_CLOSE_DATE', 'DEAL_CREATED_ON',
-                'DEAL_UPDATED_ON', 'SPECIAL_FIELDS_UPDATED_ON', 'LAST_REFRESHED_ON'
+                'DEAL_UPDATED_ON', 'SPECIAL_FIELDS_UPDATED_ON', 'LAST_REFRESHED_ON',
+                'PROJECT_END_DATE'
             ]
             for field in timestamp_fields:
                 if deal_data_raw.get(field) is not None and str(deal_data_raw.get(field)).strip() == '':
@@ -202,7 +208,8 @@ def sync_deals(event):
             NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD,
             LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID,
             SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING,
-            DESCRIPTION, TECH_INVOLVED)
+            DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS, MSA_PAYMENT_TERMS,
+            DEAL_REGION)
              VALUES
             (%(DEAL_ID)s, %(DEAL_NAME)s, %(DEAL_OWNER)s, %(DEAL_OWNER_ID)s, %(DEAL_OWNER_EMAIL)s,
             %(DEAL_OWNER_NAME)s, %(DEAL_STAGE_ID)s, %(DEAL_STAGE_NAME)s, %(COMPANY_ID)s, %(COMPANY_NAME)s,
@@ -213,7 +220,8 @@ def sync_deals(event):
             CURRENT_TIMESTAMP(), %(DELIVERY_LEAD_ID)s, %(DELIVERY_LEAD_EMAIL)s, %(DELIVERY_LEAD_NAME)s,
             %(SOLUTION_LEAD_ID)s, %(SOLUTION_LEAD_EMAIL)s, %(SOLUTION_LEAD_NAME)s, %(REVENUE_TYPE)s,
             %(CURRENCY)s, %(BOOK_LEADS_2026)s, %(BOOK_2026_EMAIL)s, %(OFFERING)s,
-            %(DESCRIPTION)s, %(TECH_INVOLVED)s)""",
+            %(DESCRIPTION)s, %(TECH_INVOLVED)s, %(PRIMARY_ENTITY)s, %(PROJECT_END_DATE)s, %(SALES_DECKS_PRESENTATIONS)s,
+            %(MSA_PAYMENT_TERMS)s, %(DEAL_REGION)s)""",
                               raw_deals)
         # upsert from temp table to main table
         print("Upserting data into main table")
@@ -260,7 +268,12 @@ def sync_deals(event):
                 target.BOOK_2026_EMAIL = source.BOOK_2026_EMAIL,
                 target.OFFERING = source.OFFERING,
                 target.DESCRIPTION = source.DESCRIPTION,
-                target.TECH_INVOLVED = source.TECH_INVOLVED
+                target.TECH_INVOLVED = source.TECH_INVOLVED,
+                target.PRIMARY_ENTITY = source.PRIMARY_ENTITY,
+                target.PROJECT_END_DATE = source.PROJECT_END_DATE,
+                target.SALES_DECKS_PRESENTATIONS = source.SALES_DECKS_PRESENTATIONS,
+                target.MSA_PAYMENT_TERMS = source.MSA_PAYMENT_TERMS,
+                target.DEAL_REGION = source.DEAL_REGION
             WHEN NOT MATCHED THEN
                 INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME,
                 DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS,
@@ -269,7 +282,8 @@ def sync_deals(event):
                 DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON,
                 DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL,
                 SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING,
-                DESCRIPTION, TECH_INVOLVED)
+                DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS,
+                MSA_PAYMENT_TERMS, DEAL_REGION)
                 VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID,
                 source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME,
                 source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID,
@@ -280,7 +294,8 @@ def sync_deals(event):
                 source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID,
                 source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE, source.CURRENCY,
                 source.BOOK_LEADS_2026, source.BOOK_2026_EMAIL, source.OFFERING,
-                source.DESCRIPTION, source.TECH_INVOLVED)
+                source.DESCRIPTION, source.TECH_INVOLVED, source.PRIMARY_ENTITY, source.PROJECT_END_DATE,
+                source.SALES_DECKS_PRESENTATIONS, source.MSA_PAYMENT_TERMS, source.DEAL_REGION)
         """
                           )
         print(f"Done - Deals Updated/Created Since: {sync_from}")

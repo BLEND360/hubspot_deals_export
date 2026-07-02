@@ -297,7 +297,12 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "BOOK_2026_EMAIL": get_2026_book_lead_email(deal_properties.get('n2026_book')),
         "OFFERING": deal_properties.get('offering').replace("'", "''") if deal_properties.get('offering') else None,
         "DESCRIPTION": deal_properties.get('description', '').replace("'", "''") if deal_properties.get('description') else None,
-        "TECH_INVOLVED": deal_properties.get('tech_involved', '').replace("'", "''") if deal_properties.get('tech_involved') else None
+        "TECH_INVOLVED": deal_properties.get('tech_involved', '').replace("'", "''") if deal_properties.get('tech_involved') else None,
+        "PRIMARY_ENTITY": deal_properties.get('primary_entity', '').replace("'", "''") if deal_properties.get('primary_entity') else None,
+        "PROJECT_END_DATE": deal_properties.get('est__project_end_date__cloned_'),
+        "SALES_DECKS_PRESENTATIONS": deal_properties.get('sales_decks__presentations', '').replace("'", "''") if deal_properties.get('sales_decks__presentations') else None,
+        "MSA_PAYMENT_TERMS": deal_properties.get('msa_payment_terms', '').replace("'", "''") if deal_properties.get('msa_payment_terms') else None,
+        "DEAL_REGION": deal_properties.get('deal_region', '').replace("'", "''") if deal_properties.get('deal_region') else None
     }
     deal_data = {key: none_to_null(value) for key, value in deal_data_raw.items()}
 
@@ -343,7 +348,12 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
                         {deal_data['BOOK_2026_EMAIL']} as BOOK_2026_EMAIL,
                         {deal_data['OFFERING']} as OFFERING,
                         {deal_data['DESCRIPTION']} as DESCRIPTION,
-                        {deal_data['TECH_INVOLVED']} as TECH_INVOLVED
+                        {deal_data['TECH_INVOLVED']} as TECH_INVOLVED,
+                        {deal_data['PRIMARY_ENTITY']} as PRIMARY_ENTITY,
+                        {deal_data['PROJECT_END_DATE']} as PROJECT_END_DATE,
+                        {deal_data['SALES_DECKS_PRESENTATIONS']} as SALES_DECKS_PRESENTATIONS,
+                        {deal_data['MSA_PAYMENT_TERMS']} as MSA_PAYMENT_TERMS,
+                        {deal_data['DEAL_REGION']} as DEAL_REGION
                     ) AS source
             ON (target.DEAL_ID = source.DEAL_ID)
             WHEN MATCHED THEN
@@ -386,10 +396,15 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
                     target.BOOK_2026_EMAIL = source.BOOK_2026_EMAIL,
                     target.OFFERING = source.OFFERING,
                     target.DESCRIPTION = source.DESCRIPTION,
-                    target.TECH_INVOLVED = source.TECH_INVOLVED
+                    target.TECH_INVOLVED = source.TECH_INVOLVED,
+                    target.PRIMARY_ENTITY = source.PRIMARY_ENTITY,
+                    target.PROJECT_END_DATE = source.PROJECT_END_DATE,
+                    target.SALES_DECKS_PRESENTATIONS = source.SALES_DECKS_PRESENTATIONS,
+                    target.MSA_PAYMENT_TERMS = source.MSA_PAYMENT_TERMS,
+                    target.DEAL_REGION = source.DEAL_REGION
             WHEN NOT MATCHED THEN
-                INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME, DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS, PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN, NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING, DESCRIPTION, TECH_INVOLVED)
-                VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID, source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME, source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID, source.PROJECT_START_DATE, source.PROJECT_CLOSE_DATE, source.ENGAGEMENT_TYPE, source.DURATION_IN_MONTHS, source.DEAL_COLLABORATORS, source.DEAL_CREATED_ON, source.DEAL_UPDATED_ON, source.IS_ARCHIVED, source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE, source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON, source.DELIVERY_LEAD_ID, source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID, source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE, source.CURRENCY, source.BOOK_LEADS_2026, source.BOOK_2026_EMAIL, source.OFFERING, source.DESCRIPTION, source.TECH_INVOLVED);
+                INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME, DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS, PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN, NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING, DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS, MSA_PAYMENT_TERMS, DEAL_REGION)
+                VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID, source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME, source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID, source.PROJECT_START_DATE, source.PROJECT_CLOSE_DATE, source.ENGAGEMENT_TYPE, source.DURATION_IN_MONTHS, source.DEAL_COLLABORATORS, source.DEAL_CREATED_ON, source.DEAL_UPDATED_ON, source.IS_ARCHIVED, source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE, source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON, source.DELIVERY_LEAD_ID, source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID, source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE, source.CURRENCY, source.BOOK_LEADS_2026, source.BOOK_2026_EMAIL, source.OFFERING, source.DESCRIPTION, source.TECH_INVOLVED, source.PRIMARY_ENTITY, source.PROJECT_END_DATE, source.SALES_DECKS_PRESENTATIONS, source.MSA_PAYMENT_TERMS, source.DEAL_REGION);
         """
 
     sf_cursor.execute(merge_sql)

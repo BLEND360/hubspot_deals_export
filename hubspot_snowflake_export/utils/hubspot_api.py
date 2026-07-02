@@ -44,7 +44,12 @@ deal_properties = [
     "n2026_book",
     "offering",
     "description",
-    "tech_involved"
+    "tech_involved",
+    "primary_entity",
+    "est__project_end_date__cloned_",
+    "sales_decks__presentations",
+    "msa_payment_terms",
+    "deal_region"
 ]
 
 def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z", use_backup=False,
