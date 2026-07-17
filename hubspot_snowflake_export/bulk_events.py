@@ -7,7 +7,7 @@ import pytz
 from .utils.config import SF_DEALS_TABLE, SF_LINE_ITEMS_TABLE, SF_WAREHOUSE, SF_DATABASE, SF_SCHEMA, \
     SF_ROLE
 from .utils.hubspot_api import fetch_updated_or_created_deals, get_all_companies, get_all_stages, get_all_owners, \
-    get_all_line_items
+    get_all_line_items, get_associated_contacts_of_deals, get_contacts_by_ids_batch, get_files_by_ids_search
 from .utils.snowflake_db import close_sf_connection, create_sf_connection
 
 
@@ -19,6 +19,28 @@ def get_2026_book_lead_email(book_lead_name):
         "Rob's Porfolio": "rob.lanoue@blend360.com"
     }
     return book_lead_mapping.get(book_lead_name, None)
+
+
+def get_list_of_sales_deck_file_ids(deals):
+    file_ids = set()
+    for deal in deals:
+        sales_decks = deal['properties'].get('sales_decks__presentations')
+        if sales_decks:
+            file_ids.update(fid.strip() for fid in sales_decks.split(';') if fid.strip())
+    return list(file_ids)
+
+
+def get_sales_decks_names(file_ids_str, file_names_by_id):
+    """Map semicolon-separated file ids to a JSON list of {id, name} dicts using a prefetched lookup (bulk style)."""
+    if not file_ids_str:
+        return None
+    result = []
+    for fid in file_ids_str.split(";"):
+        fid = fid.strip()
+        if not fid:
+            continue
+        result.append({"id": fid, "name": file_names_by_id.get(fid)})
+    return json.dumps(result) if result else None
 
 
 def sync_deals(event):
@@ -51,10 +73,23 @@ def sync_deals(event):
     print(f"Deals Updated/Created Since: {formatted_datetime} - {len(updated_deals_since)}")
     deals_with_companies = get_all_companies()
     print("done company details")
+    deal_ids_for_contacts = [deal['id'] for deal in updated_deals_since]
+    deals_to_associated_contact_ids = get_associated_contacts_of_deals(deal_ids_for_contacts)
+    all_contact_ids = list(set(cid for cids in deals_to_associated_contact_ids.values() for cid in cids))
+    contact_details_by_id = get_contacts_by_ids_batch(all_contact_ids)
+    deals_with_contacts = {
+        deal_id: [{"firstname": contact_details_by_id[cid]["firstname"], "lastname": contact_details_by_id[cid]["lastname"]}
+                  for cid in deals_to_associated_contact_ids.get(deal_id, []) if cid in contact_details_by_id]
+        for deal_id in deal_ids_for_contacts
+    }
+    print("done contact details")
     pipeline_stages = get_all_stages()
     print("done pipeline stages")
     owner_details = get_all_owners()
     print("done owner details")
+    sales_deck_file_ids = get_list_of_sales_deck_file_ids(updated_deals_since)
+    sales_deck_file_names_by_id = get_files_by_ids_search(sales_deck_file_ids)
+    print("done sales decks presentations file details")
     deals_with_line_items = get_all_line_items()
     print("done line items")
     line_items_deals = [deal_id for deal_id in deals_with_line_items.keys()]
@@ -88,6 +123,7 @@ def sync_deals(event):
             delivery_lead_details = owner_details.get(deal_properties['delivery_lead'], {})
             solution_lead_details = owner_details.get(deal_properties['solution_lead'], {})
             company_details = deals_with_companies.get(deal_id, {})
+            deal_contacts = deals_with_contacts.get(deal_id, [])
             deal_collaborators_str = deal_properties['hs_all_collaborator_owner_ids']
             deal_collaborators = []
             if deal_collaborators_str:
@@ -138,9 +174,11 @@ def sync_deals(event):
                 "TECH_INVOLVED": deal_properties.get('tech_involved'),
                 "PRIMARY_ENTITY": deal_properties.get('primary_entity'),
                 "PROJECT_END_DATE": deal_properties.get('est__project_end_date__cloned_'),
-                "SALES_DECKS_PRESENTATIONS": deal_properties.get('sales_decks__presentations'),
+                "SALES_DECKS_PRESENTATIONS": get_sales_decks_names(deal_properties.get('sales_decks__presentations'), sales_deck_file_names_by_id),
                 "MSA_PAYMENT_TERMS": deal_properties.get('msa_payment_terms'),
-                "DEAL_REGION": deal_properties.get('deal_region')
+                "DEAL_REGION": deal_properties.get('deal_region'),
+                "MSA_PIPELINE_STAGE": deal_properties.get('msa_pipeline_stage'),
+                "DEAL_CONTACTS": json.dumps(deal_contacts) if deal_contacts else None
             }
 
             timestamp_fields = [
@@ -184,7 +222,7 @@ def sync_deals(event):
             LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID,
             SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING,
             DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS, MSA_PAYMENT_TERMS,
-            DEAL_REGION)
+            DEAL_REGION, MSA_PIPELINE_STAGE, DEAL_CONTACTS)
              VALUES
             (%(DEAL_ID)s, %(DEAL_NAME)s, %(DEAL_OWNER)s, %(DEAL_OWNER_ID)s, %(DEAL_OWNER_EMAIL)s,
             %(DEAL_OWNER_NAME)s, %(DEAL_STAGE_ID)s, %(DEAL_STAGE_NAME)s, %(COMPANY_ID)s, %(COMPANY_NAME)s,
@@ -196,7 +234,7 @@ def sync_deals(event):
             %(SOLUTION_LEAD_ID)s, %(SOLUTION_LEAD_EMAIL)s, %(SOLUTION_LEAD_NAME)s, %(REVENUE_TYPE)s, %(CURRENCY)s,
             %(BOOK_LEADS_2026)s, %(BOOK_2026_EMAIL)s, %(OFFERING)s,
             %(DESCRIPTION)s, %(TECH_INVOLVED)s, %(PRIMARY_ENTITY)s, %(PROJECT_END_DATE)s, %(SALES_DECKS_PRESENTATIONS)s,
-            %(MSA_PAYMENT_TERMS)s, %(DEAL_REGION)s)""",
+            %(MSA_PAYMENT_TERMS)s, %(DEAL_REGION)s, %(MSA_PIPELINE_STAGE)s, %(DEAL_CONTACTS)s)""",
                               raw_deals)
         # upsert from temp table to main table
         print("Upserting data into main table")
@@ -248,7 +286,9 @@ def sync_deals(event):
                 target.PROJECT_END_DATE = source.PROJECT_END_DATE,
                 target.SALES_DECKS_PRESENTATIONS = source.SALES_DECKS_PRESENTATIONS,
                 target.MSA_PAYMENT_TERMS = source.MSA_PAYMENT_TERMS,
-                target.DEAL_REGION = source.DEAL_REGION
+                target.DEAL_REGION = source.DEAL_REGION,
+                target.MSA_PIPELINE_STAGE = source.MSA_PIPELINE_STAGE,
+                target.DEAL_CONTACTS = source.DEAL_CONTACTS
             WHEN NOT MATCHED THEN
                 INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME,
                 DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS,
@@ -258,7 +298,7 @@ def sync_deals(event):
                 DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL,
                 SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING,
                 DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS,
-                MSA_PAYMENT_TERMS, DEAL_REGION)
+                MSA_PAYMENT_TERMS, DEAL_REGION, MSA_PIPELINE_STAGE, DEAL_CONTACTS)
                 VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID,
                 source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME,
                 source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID,
@@ -270,7 +310,8 @@ def sync_deals(event):
                 source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE, source.CURRENCY,
                 source.BOOK_LEADS_2026, source.BOOK_2026_EMAIL, source.OFFERING,
                 source.DESCRIPTION, source.TECH_INVOLVED, source.PRIMARY_ENTITY, source.PROJECT_END_DATE,
-                source.SALES_DECKS_PRESENTATIONS, source.MSA_PAYMENT_TERMS, source.DEAL_REGION)
+                source.SALES_DECKS_PRESENTATIONS, source.MSA_PAYMENT_TERMS, source.DEAL_REGION,
+                source.MSA_PIPELINE_STAGE, source.DEAL_CONTACTS)
         """
                           )
         print(f"Done - Deals Updated/Created Since: {sync_from}")

@@ -8,7 +8,8 @@ from .bulk_events import get_2026_book_lead_email
 from .utils.config import SF_COMPANIES_TABLE, SF_DEAL_OWNERS_TABLE, SF_DEAL_COLLABORATORS_TABLE, SF_DEALS_TABLE, \
     SF_LINE_ITEMS_TABLE
 from .utils.hubspot_api import get_deal, get_company_details, get_deal_to_company_association, get_owner_details, \
-    get_deal_pipeline_stages, get_line_items_by_ids
+    get_deal_pipeline_stages, get_line_items_by_ids, get_deal_to_contact_association, get_contact_details, \
+    get_file_name_by_id
 
 
 def handle_company_details(deal_id, sf_cursor):
@@ -38,6 +39,21 @@ def handle_company_details(deal_id, sf_cursor):
         return {"associations": deal_company_assc,
                 "company_details": {"id": company_id, "name": company_name, "domain": company_domain}}
     return {}
+
+
+def handle_contact_details(deal_id):
+    deal_contact_assc = get_deal_to_contact_association(deal_id)
+    contacts = []
+    for assc in deal_contact_assc:
+        contact_id = assc['toObjectId']
+        contact_details = get_contact_details(contact_id)
+        if not contact_details or not contact_details.get('properties'):
+            continue
+        firstname = contact_details['properties'].get('firstname')
+        lastname = contact_details['properties'].get('lastname')
+        contacts.append({"firstname": firstname.replace("'", "''") if firstname else firstname,
+                         "lastname": lastname.replace("'", "''") if lastname else lastname})
+    return contacts
 
 
 def get_deleted_line_item_ids(updated_line_item_ids, existing_line_items):
@@ -244,8 +260,22 @@ def none_to_null(value):
     return "NULL" if value is None or value == '' else f"'{value}'"
 
 
+def get_sales_decks_presentations(file_ids_str):
+    """Resolve semicolon-separated file ids to a JSON list of {id, name} dicts (single-deal style)."""
+    if not file_ids_str:
+        return None
+    result = []
+    for file_id in file_ids_str.split(";"):
+        file_id = file_id.strip()
+        if not file_id:
+            continue
+        result.append({"id": file_id, "name": get_file_name_by_id(file_id)})
+    return json.dumps(result) if result else None
+
+
 def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details, company_details, stage_details,
-                delivery_lead_details, solution_lead_details):
+                delivery_lead_details, solution_lead_details, contact_details=None):
+    contact_details = contact_details or []
     company_name = None if not company_details else company_details['name'] if company_details['name'] else " ".join(
         company_details['domain'].split(".")[:-1]).title() if company_details['domain'] else None
     stage_name = next((stage['label'] for stage in stage_details if stage['id'] == deal_properties['dealstage']), None)
@@ -256,6 +286,8 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         work_ahead = 'No'
     else:
         work_ahead = deal_properties['work_ahead']
+
+    sales_decks_presentations = get_sales_decks_presentations(deal_properties.get('sales_decks__presentations'))
 
     deal_data_raw = {
         "DEAL_ID": deal_id,
@@ -300,9 +332,11 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "TECH_INVOLVED": deal_properties.get('tech_involved', '').replace("'", "''") if deal_properties.get('tech_involved') else None,
         "PRIMARY_ENTITY": deal_properties.get('primary_entity', '').replace("'", "''") if deal_properties.get('primary_entity') else None,
         "PROJECT_END_DATE": deal_properties.get('est__project_end_date__cloned_'),
-        "SALES_DECKS_PRESENTATIONS": deal_properties.get('sales_decks__presentations', '').replace("'", "''") if deal_properties.get('sales_decks__presentations') else None,
+        "SALES_DECKS_PRESENTATIONS": sales_decks_presentations.replace("'", "''") if sales_decks_presentations else None,
         "MSA_PAYMENT_TERMS": deal_properties.get('msa_payment_terms', '').replace("'", "''") if deal_properties.get('msa_payment_terms') else None,
-        "DEAL_REGION": deal_properties.get('deal_region', '').replace("'", "''") if deal_properties.get('deal_region') else None
+        "DEAL_REGION": deal_properties.get('deal_region', '').replace("'", "''") if deal_properties.get('deal_region') else None,
+        "MSA_PIPELINE_STAGE": deal_properties.get('msa_pipeline_stage', '').replace("'", "''") if deal_properties.get('msa_pipeline_stage') else None,
+        "DEAL_CONTACTS": json.dumps(contact_details) if contact_details else None
     }
     deal_data = {key: none_to_null(value) for key, value in deal_data_raw.items()}
 
@@ -353,7 +387,9 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
                         {deal_data['PROJECT_END_DATE']} as PROJECT_END_DATE,
                         {deal_data['SALES_DECKS_PRESENTATIONS']} as SALES_DECKS_PRESENTATIONS,
                         {deal_data['MSA_PAYMENT_TERMS']} as MSA_PAYMENT_TERMS,
-                        {deal_data['DEAL_REGION']} as DEAL_REGION
+                        {deal_data['DEAL_REGION']} as DEAL_REGION,
+                        {deal_data['MSA_PIPELINE_STAGE']} as MSA_PIPELINE_STAGE,
+                        {deal_data['DEAL_CONTACTS']} as DEAL_CONTACTS
                     ) AS source
             ON (target.DEAL_ID = source.DEAL_ID)
             WHEN MATCHED THEN
@@ -401,10 +437,12 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
                     target.PROJECT_END_DATE = source.PROJECT_END_DATE,
                     target.SALES_DECKS_PRESENTATIONS = source.SALES_DECKS_PRESENTATIONS,
                     target.MSA_PAYMENT_TERMS = source.MSA_PAYMENT_TERMS,
-                    target.DEAL_REGION = source.DEAL_REGION
+                    target.DEAL_REGION = source.DEAL_REGION,
+                    target.MSA_PIPELINE_STAGE = source.MSA_PIPELINE_STAGE,
+                    target.DEAL_CONTACTS = source.DEAL_CONTACTS
             WHEN NOT MATCHED THEN
-                INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME, DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS, PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN, NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING, DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS, MSA_PAYMENT_TERMS, DEAL_REGION)
-                VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID, source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME, source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID, source.PROJECT_START_DATE, source.PROJECT_CLOSE_DATE, source.ENGAGEMENT_TYPE, source.DURATION_IN_MONTHS, source.DEAL_COLLABORATORS, source.DEAL_CREATED_ON, source.DEAL_UPDATED_ON, source.IS_ARCHIVED, source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE, source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON, source.DELIVERY_LEAD_ID, source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID, source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE, source.CURRENCY, source.BOOK_LEADS_2026, source.BOOK_2026_EMAIL, source.OFFERING, source.DESCRIPTION, source.TECH_INVOLVED, source.PRIMARY_ENTITY, source.PROJECT_END_DATE, source.SALES_DECKS_PRESENTATIONS, source.MSA_PAYMENT_TERMS, source.DEAL_REGION);
+                INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME, DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS, PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN, NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING, DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS, MSA_PAYMENT_TERMS, DEAL_REGION, MSA_PIPELINE_STAGE, DEAL_CONTACTS)
+                VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID, source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME, source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID, source.PROJECT_START_DATE, source.PROJECT_CLOSE_DATE, source.ENGAGEMENT_TYPE, source.DURATION_IN_MONTHS, source.DEAL_COLLABORATORS, source.DEAL_CREATED_ON, source.DEAL_UPDATED_ON, source.IS_ARCHIVED, source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE, source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON, source.DELIVERY_LEAD_ID, source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID, source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE, source.CURRENCY, source.BOOK_LEADS_2026, source.BOOK_2026_EMAIL, source.OFFERING, source.DESCRIPTION, source.TECH_INVOLVED, source.PRIMARY_ENTITY, source.PROJECT_END_DATE, source.SALES_DECKS_PRESENTATIONS, source.MSA_PAYMENT_TERMS, source.DEAL_REGION, source.MSA_PIPELINE_STAGE, source.DEAL_CONTACTS);
         """
 
     sf_cursor.execute(merge_sql)
@@ -488,6 +526,7 @@ def handle_deal(deal, sf_cursor):
         print(f"Upserting Deal {deal_id} - {deal_properties['dealname']}")
 
         company_associations = handle_company_details(deal_id, sf_cursor)
+        contact_details = handle_contact_details(deal_id)
         owner_details = handle_deal_owner_details(deal_owner, sf_cursor)
         delivery_lead_details = handle_deal_lead_details(deal_properties['delivery_lead'])
         solution_lead_details = handle_deal_lead_details(deal_properties['solution_lead'])
@@ -501,7 +540,7 @@ def handle_deal(deal, sf_cursor):
         # special_fields_updated_on = handle_special_fields(deal_id, deal_properties, does_line_items_updated, sf_cursor)
         upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_details,
                     company_associations.get('company_details', None),
-                    stage_details, delivery_lead_details, solution_lead_details)
+                    stage_details, delivery_lead_details, solution_lead_details, contact_details)
         handle_line_items(deal, sf_cursor)
 
     except Exception as ex:

@@ -49,7 +49,8 @@ deal_properties = [
     "est__project_end_date__cloned_",
     "sales_decks__presentations",
     "msa_payment_terms",
-    "deal_region"
+    "deal_region",
+    "msa_pipeline_stage"
 ]
 
 def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z", use_backup=False,
@@ -183,6 +184,32 @@ def get_company_details(company_id):
         return company_details
     else:
         print(f"Error fetching company details for company {company_id}: {response.status_code} - {response.text}")
+        return None
+
+
+def get_deal_to_contact_association(deal_id):
+    url = f"{BASE_URL}/crm/v4/objects/deals/{deal_id}/associations/contact"
+    response = requests.get(url, headers=auth_headers)
+    if response.status_code == 200:
+        contact_associations = response.json().get('results', [])
+        print(f"Found {len(contact_associations)} contacts associated with deal {deal_id}.")
+        return contact_associations
+    else:
+        print(f"Error fetching contact associations for deal {deal_id}: {response.status_code} - {response.text}")
+        return []
+
+
+def get_contact_details(contact_id):
+    url = f"{BASE_URL}/crm/v3/objects/contacts/{contact_id}"
+    params = {
+        'properties': 'firstname,lastname',
+    }
+    response = requests.get(url, params=params, headers=auth_headers)
+    if response.status_code == 200:
+        contact_details = response.json()
+        return contact_details
+    else:
+        print(f"Error fetching contact details for contact {contact_id}: {response.status_code} - {response.text}")
         return None
 
 
@@ -522,6 +549,22 @@ def get_associated_companies_of_deals(deal_ids):
         deals_to_associated_company_ids.update({association["from"]["id"]: association["to"][0]["id"] if association["to"] else None for association in data["results"]})
     return deals_to_associated_company_ids
 
+def get_associated_contacts_of_deals(deal_ids):
+    """
+    Get all associated contacts of deals
+    :param deal_ids: The maximum allowed batch size is 1000
+    :return: dict of deal_id to list of contact_ids
+    """
+    url = f"{BASE_URL}/crm/v3/associations/deal/contacts/batch/read"
+    deals_as_batch_of_1000 = [deal_ids[i:i + 1000] for i in range(0, len(deal_ids), 1000)]
+    deals_to_associated_contact_ids = {}
+    for deal_ids_ in deals_as_batch_of_1000:
+        payload = {"inputs": [{"id": deal_id} for deal_id in deal_ids_]}
+        data = call_api("POST", url, headers=auth_headers, payload=json.dumps(payload))
+        deals_to_associated_contact_ids.update({association["from"]["id"]: [i["id"] for i in association["to"]] for association in data["results"]})
+    return deals_to_associated_contact_ids
+
+
 def get_associated_line_items_of_deals(deal_ids):
     url = f"{BASE_URL}/crm/v3/associations/deal/line_item/batch/read"
     deals_as_batch_of_1000 = [deal_ids[i:i + 1000] for i in range(0, len(deal_ids), 1000)]
@@ -671,6 +714,27 @@ def get_companies_by_ids_batch(company_ids):
     return company_details
 
 
+def get_contacts_by_ids_batch(contact_ids):
+    url = f"{BASE_URL}/crm/v3/objects/contacts/batch/read"
+    contact_details = {}
+    contact_ids_batch_of_100 = [contact_ids[i:i + 100] for i in range(0, len(contact_ids), 100)]
+    for contact_ids_ in contact_ids_batch_of_100:
+        payload = json.dumps({
+            "inputs": [{"id": contact_id} for contact_id in contact_ids_],
+            "limit": 100,
+            "properties": [
+                "firstname",
+                "lastname"
+            ]
+        })
+        data = call_api("POST", url, payload=payload)
+        for contact in data["results"]:
+            contact_details[contact["id"]] = {"id": contact["id"],
+                                              "firstname": contact["properties"].get("firstname"),
+                                              "lastname": contact["properties"].get("lastname")}
+    return contact_details
+
+
 def get_line_items_by_ids_batch(line_item_ids):
     url = f"{BASE_URL}/crm/v3/objects/line_items/batch/read"
     line_item_details = {}
@@ -699,6 +763,73 @@ def get_line_items_by_ids_batch(line_item_ids):
                                                        "currency": line_item["properties"].get("hs_line_item_currency_code", "USD")
                                                   }
     return line_item_details
+
+
+def build_file_name(file_obj):
+    """Build 'name.extension' from a HubSpot file object. Falls back to name if extension missing."""
+    if not file_obj:
+        return None
+    name = file_obj.get('name')
+    extension = file_obj.get('extension')
+    if name and extension:
+        return f"{name}.{extension}"
+    return name or None
+
+
+def get_file_name_by_id(file_id):
+    """Single file lookup (single-deal style). Returns 'name.extension' or None."""
+    if not file_id:
+        return None
+    url = f"{BASE_URL}/files/v3/files/{file_id}"
+    response = requests.get(url, headers=auth_headers)
+    if response.status_code == 200:
+        return build_file_name(response.json())
+    else:
+        print(f"Error fetching file details for file {file_id}: {response.status_code} - {response.text}")
+        return None
+
+
+def get_files_by_ids_search(file_ids):
+    """
+    Batch file lookup (bulk style) using the Files search API.
+    Note: the search API does NOT return files with access "HIDDEN_PRIVATE";
+    those are resolved with a per-id GET fallback.
+    :param file_ids: list of file ids
+    :return: dict of file_id -> 'name.extension'
+    """
+    file_names_by_id = {}
+    if not file_ids:
+        return file_names_by_id
+    url = f"{BASE_URL}/files/v3/files/search"
+    file_ids_batch_of_100 = [file_ids[i:i + 100] for i in range(0, len(file_ids), 100)]
+    for file_ids_ in file_ids_batch_of_100:
+        after = None
+        while True:
+            params = [('properties', 'name'), ('properties', 'extension'), ('limit', 100)]
+            for fid in file_ids_:
+                params.append(('ids', fid))
+            if after:
+                params.append(('after', after))
+            response = requests.get(url, params=params, headers=auth_headers)
+            if response.status_code != 200:
+                print(f"Error searching files: {response.status_code} - {response.text}")
+                break
+            data = response.json()
+            for file_obj in data.get('results', []):
+                file_names_by_id[file_obj['id']] = build_file_name(file_obj)
+            after = data.get('paging', {}).get('next', {}).get('after')
+            if not after:
+                break
+
+    # Search omits HIDDEN_PRIVATE files - fall back to a per-id GET for anything missed.
+    missed_file_ids = set(file_ids) - set(file_names_by_id.keys())
+    for missed_file_id in missed_file_ids:
+        file_name = get_file_name_by_id(missed_file_id)
+        if file_name:
+            file_names_by_id[missed_file_id] = file_name
+        else:
+            print(f"File not found via search or GET: {missed_file_id}")
+    return file_names_by_id
 
 
 def get_owners_by_ids_users_search(owner_ids):
