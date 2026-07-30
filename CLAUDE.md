@@ -55,8 +55,8 @@ hubspot_deals_export/
 - `HUBSPOT_ENTITY_SYNC_INFO` (sync status tracking)
 
 ## HubSpot Deal Fields Synced
-Key fields synced from HubSpot to `HUBSPOT_DEALS`: DEAL_NAME, DEAL_STAGE_NAME, COMPANY_NAME, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_AMOUNT, WORK_AHEAD, OFFERING, DESCRIPTION (deal description), TECH_INVOLVED (tech stack), CURRENCY, PIPELINE_ID, REVENUE_TYPE, NS_PROJECT_ID, DEAL_TYPE, BOOK_LEADS_2026, BOOK_2026_EMAIL, SALES_DECKS_PRESENTATIONS, and more.
-- HubSpot API property names: `description` → DESCRIPTION, `tech_involved` → TECH_INVOLVED, `offering` → OFFERING, `sales_decks__presentations` → SALES_DECKS_PRESENTATIONS
+Key fields synced from HubSpot to `HUBSPOT_DEALS`: DEAL_NAME, DEAL_STAGE_NAME, COMPANY_NAME, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_AMOUNT, WORK_AHEAD, OFFERING, DESCRIPTION (deal description), TECH_INVOLVED (tech stack), CURRENCY, PIPELINE_ID, REVENUE_TYPE, NS_PROJECT_ID, DEAL_TYPE, BOOK_LEADS_2026, BOOK_2026_EMAIL, SALES_DECKS_PRESENTATIONS, MSA_PIPELINE_STAGE, MSA_NAME, and more.
+- HubSpot API property names: `description` → DESCRIPTION, `tech_involved` → TECH_INVOLVED, `offering` → OFFERING, `sales_decks__presentations` → SALES_DECKS_PRESENTATIONS, `msa_name` on the associated MSA custom object → MSA_NAME
 
 ### SALES_DECKS_PRESENTATIONS (file resolution)
 - The `sales_decks__presentations` deal property holds semicolon-separated HubSpot **file IDs** (e.g. `"217029166877;217029169823"`).
@@ -66,6 +66,14 @@ Key fields synced from HubSpot to `HUBSPOT_DEALS`: DEAL_NAME, DEAL_STAGE_NAME, C
   - `get_files_by_ids_search(file_ids)` — batched `GET /files/v3/files/search?ids=...&properties=name&properties=extension` (used by the bulk paths in `bulk_events_new.py` / `bulk_events.py`). Batches 100 IDs/request.
 - **Caveat:** the Files *search* API does NOT return files with access `HIDDEN_PRIVATE`. `get_files_by_ids_search` falls back to a per-ID `get_file_name_by_id` GET for any ID search omits.
 - The Files API is `v3` and current — HubSpot's docs shelve it under "Legacy", but that is only a docs-site label, not a deprecated endpoint (there is no v4).
+
+### MSA_NAME (associated MSA custom object)
+- `MSA_NAME` is not a deal property. It comes from the MSA custom object associated to the deal.
+- MSA custom object type defaults to `2-65998916` via `MSA_OBJECT_TYPE_ID` in `utils/config.py`.
+- Association lookup uses HubSpot batch associations: `POST /crm/v3/associations/0-3/{MSA_OBJECT_TYPE_ID}/batch/read`.
+- MSA record lookup uses HubSpot custom object batch read: `POST /crm/v3/objects/{MSA_OBJECT_TYPE_ID}/batch/read` with property `msa_name`.
+- Multiple associated MSA names are stored as a semicolon-separated string in `HUBSPOT_DEALS.MSA_NAME`.
+- `MSA_NAME` is wired into all deal write paths: `bulk_events_new.py`, `bulk_events.py`, and `handle_deal.py`.
 
 ## Build & Deploy
 ```bash

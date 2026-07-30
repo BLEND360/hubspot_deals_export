@@ -592,6 +592,24 @@ def get_associated_contacts_of_deals(deal_ids):
     return deals_to_associated_contact_ids
 
 
+def get_associated_msas_of_deals(deal_ids):
+    """
+    Get all associated MSA custom-object records of deals.
+    :param deal_ids: The maximum allowed batch size is 1000
+    :return: dict of deal_id to list of msa ids
+    """
+    url = f"{BASE_URL}/crm/v3/associations/0-3/{MSA_OBJECT_TYPE_ID}/batch/read"
+    deals_as_batch_of_1000 = [deal_ids[i:i + 1000] for i in range(0, len(deal_ids), 1000)]
+    deals_to_associated_msa_ids = {}
+    for deal_ids_ in deals_as_batch_of_1000:
+        payload = {"inputs": [{"id": deal_id} for deal_id in deal_ids_]}
+        data = call_api("POST", url, headers=auth_headers, payload=json.dumps(payload))
+        deals_to_associated_msa_ids.update(
+            {association["from"]["id"]: [i["id"] for i in association["to"]] for association in data["results"]}
+        )
+    return deals_to_associated_msa_ids
+
+
 def get_associated_line_items_of_deals(deal_ids):
     url = f"{BASE_URL}/crm/v3/associations/deal/line_item/batch/read"
     deals_as_batch_of_1000 = [deal_ids[i:i + 1000] for i in range(0, len(deal_ids), 1000)]
@@ -760,6 +778,27 @@ def get_contacts_by_ids_batch(contact_ids):
                                               "firstname": contact["properties"].get("firstname"),
                                               "lastname": contact["properties"].get("lastname")}
     return contact_details
+
+
+def get_msas_by_ids_batch(msa_ids):
+    url = f"{BASE_URL}/crm/v3/objects/{MSA_OBJECT_TYPE_ID}/batch/read"
+    msa_details = {}
+    msa_ids_batch_of_100 = [msa_ids[i:i + 100] for i in range(0, len(msa_ids), 100)]
+    for msa_ids_ in msa_ids_batch_of_100:
+        payload = json.dumps({
+            "inputs": [{"id": msa_id} for msa_id in msa_ids_],
+            "limit": 100,
+            "properties": [
+                "msa_name"
+            ]
+        })
+        data = call_api("POST", url, payload=payload)
+        for msa in data["results"]:
+            msa_details[msa["id"]] = {
+                "id": msa["id"],
+                "msa_name": msa["properties"].get("msa_name")
+            }
+    return msa_details
 
 
 def get_line_items_by_ids_batch(line_item_ids):
