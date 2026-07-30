@@ -19,7 +19,7 @@ Parameters:
     Default: RESOURCE_REQUEST_TOOL
     Type: String
   SfRole:
-    Default: SNOWFLAKE_RESOURCE_REQUEST_ADMIN
+    Default: PRICING_APP_DEV_ROLE
     Type: String
   SfSchema:
     Default: PRICING_TOOL_SANDBOX_HYBRID
