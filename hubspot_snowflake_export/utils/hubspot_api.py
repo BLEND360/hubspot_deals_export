@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 
 import requests
 
-from hubspot_snowflake_export.utils.config import SYNC_ALERT_TO_EMAILS, SYNC_ALERT_CC_EMAILS, ENV_, LOCAL_CACHE
+from hubspot_snowflake_export.utils.config import SYNC_ALERT_TO_EMAILS, SYNC_ALERT_CC_EMAILS, ENV_, LOCAL_CACHE, \
+    MSA_OBJECT_TYPE_ID
 from hubspot_snowflake_export.utils.send_mail import send_email
 
 # HubSpot API base URL
@@ -443,6 +444,32 @@ def get_all_owners(use_backup=False, archived_types=["false", "true"]):
 
 
 # print(get_all_owners())
+
+
+# MSA custom object type id (holds the msa_pipeline_stage stages) — from config/env
+_msa_stage_label_cache = None
+
+
+def get_msa_stage_labels():
+    """Return a flat {stageId: label} map for every stage across all pipelines
+    of the MSA custom object. Cached for the lifetime of the Lambda container
+    since stages rarely change."""
+    global _msa_stage_label_cache
+    if _msa_stage_label_cache is not None:
+        return _msa_stage_label_cache
+
+    url = f"{BASE_URL}/crm/v3/pipelines/{MSA_OBJECT_TYPE_ID}"
+    stage_labels = {}
+    try:
+        data = call_api("GET", url)
+        for pipeline in data.get("results", []):
+            for stage in pipeline.get("stages", []):
+                stage_labels[stage["id"]] = stage["label"]
+    except Exception as ex:
+        print(f"Error fetching MSA pipeline stages: {ex}")
+
+    _msa_stage_label_cache = stage_labels
+    return stage_labels
 
 
 def get_all_stages():

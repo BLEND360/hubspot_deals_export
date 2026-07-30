@@ -9,7 +9,7 @@ from .utils.config import SF_COMPANIES_TABLE, SF_DEAL_OWNERS_TABLE, SF_DEAL_COLL
     SF_LINE_ITEMS_TABLE
 from .utils.hubspot_api import get_deal, get_company_details, get_deal_to_company_association, get_owner_details, \
     get_deal_pipeline_stages, get_line_items_by_ids, get_deal_to_contact_association, get_contact_details, \
-    get_file_name_by_id
+    get_file_name_by_id, get_msa_stage_labels
 
 
 def handle_company_details(deal_id, sf_cursor):
@@ -280,6 +280,10 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         company_details['domain'].split(".")[:-1]).title() if company_details['domain'] else None
     stage_name = next((stage['label'] for stage in stage_details if stage['id'] == deal_properties['dealstage']), None)
 
+    # msa_pipeline_stage holds a stage ID from the MSA custom object; resolve it to its label
+    msa_stage_id = deal_properties.get('msa_pipeline_stage')
+    msa_stage_name = get_msa_stage_labels().get(msa_stage_id, msa_stage_id) if msa_stage_id else None
+
     curr_time = datetime.now(pytz.timezone('America/New_York'))
 
     if deal_properties['work_ahead'] in ['No', 'blank']:
@@ -335,7 +339,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "SALES_DECKS_PRESENTATIONS": sales_decks_presentations.replace("'", "''") if sales_decks_presentations else None,
         "MSA_PAYMENT_TERMS": deal_properties.get('msa_payment_terms', '').replace("'", "''") if deal_properties.get('msa_payment_terms') else None,
         "DEAL_REGION": deal_properties.get('deal_region', '').replace("'", "''") if deal_properties.get('deal_region') else None,
-        "MSA_PIPELINE_STAGE": deal_properties.get('msa_pipeline_stage', '').replace("'", "''") if deal_properties.get('msa_pipeline_stage') else None,
+        "MSA_PIPELINE_STAGE": msa_stage_name.replace("'", "''") if msa_stage_name else None,
         "DEAL_CONTACTS": json.dumps(contact_details) if contact_details else None
     }
     deal_data = {key: none_to_null(value) for key, value in deal_data_raw.items()}

@@ -30,6 +30,10 @@ Parameters:
   S3BucketName:
     Default: hubspot-deals-info
     Type: String
+  MsaObjectTypeId:
+    Description: HubSpot custom object type id that holds the msa_pipeline_stage stages.
+    Default: 2-65998916
+    Type: String
 
 Resources:
 
@@ -100,6 +104,7 @@ Resources:
           SYNC_ALERT_TO_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_TO_EMAILS}}"
           SYNC_ALERT_CC_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_CC_EMAILS}}"
           HUBSPOT_SYNC_QUEUE: !Ref HubspotWebhookMessages
+          MSA_OBJECT_TYPE_ID: !Ref MsaObjectTypeId
           ENV_: !Ref Environment
       Events:
         SingleDealUpdate:
@@ -151,6 +156,7 @@ Resources:
           SYNC_ALERT_TO_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_TO_EMAILS}}"
           SYNC_ALERT_CC_EMAILS: !Sub "{{resolve:secretsmanager:${SecretName}:SecretString:SYNC_ALERT_CC_EMAILS}}"
           HUBSPOT_SYNC_QUEUE: !Ref HubspotWebhookMessages
+          MSA_OBJECT_TYPE_ID: !Ref MsaObjectTypeId
           ENV_: !Ref Environment
       Events:
         SQSTrigger:

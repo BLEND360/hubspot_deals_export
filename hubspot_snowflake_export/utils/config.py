@@ -27,3 +27,4 @@ HUBSPOT_SYNC_QUEUE = os.getenv("HUBSPOT_SYNC_QUEUE")
 LOCAL_CACHE = os.getenv("LOCAL_CACHE")
 
 ENV_ = os.getenv("ENV_")
+MSA_OBJECT_TYPE_ID = os.getenv("MSA_OBJECT_TYPE_ID", "2-55814803")
