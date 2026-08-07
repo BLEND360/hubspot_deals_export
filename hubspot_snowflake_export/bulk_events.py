@@ -8,7 +8,7 @@ from .utils.config import SF_DEALS_TABLE, SF_LINE_ITEMS_TABLE, SF_WAREHOUSE, SF_
     SF_ROLE
 from .utils.hubspot_api import fetch_updated_or_created_deals, get_all_companies, get_all_stages, get_all_owners, \
     get_all_line_items, get_associated_contacts_of_deals, get_contacts_by_ids_batch, get_files_by_ids_search, \
-    get_associated_msas_of_deals, get_msas_by_ids_batch
+    get_associated_msas_of_deals, get_msas_by_ids_batch, build_msa_details_json
 from .utils.snowflake_db import close_sf_connection, create_sf_connection
 
 
@@ -95,6 +95,10 @@ def sync_deals(event):
         ]
         for deal_id in deal_ids_for_contacts
     }
+    deals_with_msa_details = {
+        deal_id: build_msa_details_json(deals_to_associated_msa_ids.get(deal_id, []), msa_details_by_id)
+        for deal_id in deal_ids_for_contacts
+    }
     print("done msa details")
     pipeline_stages = get_all_stages()
     print("done pipeline stages")
@@ -138,6 +142,7 @@ def sync_deals(event):
             company_details = deals_with_companies.get(deal_id, {})
             deal_contacts = deals_with_contacts.get(deal_id, [])
             deal_msa_names = deals_with_msa_names.get(deal_id, [])
+            deal_msa_details = deals_with_msa_details.get(deal_id)
             deal_collaborators_str = deal_properties['hs_all_collaborator_owner_ids']
             deal_collaborators = []
             if deal_collaborators_str:
@@ -193,6 +198,10 @@ def sync_deals(event):
                 "DEAL_REGION": deal_properties.get('deal_region'),
                 "MSA_PIPELINE_STAGE": deal_properties.get('msa_pipeline_stage'),
                 "MSA_NAME": "; ".join(deal_msa_names) if deal_msa_names else None,
+                "MSA_DETAILS": deal_msa_details,
+                "PRIMARY_ASSOCIATED_COMPANY_ID": deal_properties.get('primary_associated_company_id'),
+                "EMEA_CONTRACTING_ENTITY": deal_properties.get('emea_contracting_entity'),
+                "COMPANY_PASSED_TESTER": deal_properties.get('company_passed_tester'),
                 "DEAL_CONTACTS": json.dumps(deal_contacts) if deal_contacts else None
             }
 
@@ -237,7 +246,8 @@ def sync_deals(event):
             LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID,
             SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING,
             DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS, MSA_PAYMENT_TERMS,
-            DEAL_REGION, MSA_PIPELINE_STAGE, MSA_NAME, DEAL_CONTACTS)
+            DEAL_REGION, MSA_PIPELINE_STAGE, MSA_NAME, MSA_DETAILS, PRIMARY_ASSOCIATED_COMPANY_ID,
+            EMEA_CONTRACTING_ENTITY, COMPANY_PASSED_TESTER, DEAL_CONTACTS)
              VALUES
             (%(DEAL_ID)s, %(DEAL_NAME)s, %(DEAL_OWNER)s, %(DEAL_OWNER_ID)s, %(DEAL_OWNER_EMAIL)s,
             %(DEAL_OWNER_NAME)s, %(DEAL_STAGE_ID)s, %(DEAL_STAGE_NAME)s, %(COMPANY_ID)s, %(COMPANY_NAME)s,
@@ -249,7 +259,9 @@ def sync_deals(event):
             %(SOLUTION_LEAD_ID)s, %(SOLUTION_LEAD_EMAIL)s, %(SOLUTION_LEAD_NAME)s, %(REVENUE_TYPE)s, %(CURRENCY)s,
             %(BOOK_LEADS_2026)s, %(BOOK_2026_EMAIL)s, %(OFFERING)s,
             %(DESCRIPTION)s, %(TECH_INVOLVED)s, %(PRIMARY_ENTITY)s, %(PROJECT_END_DATE)s, %(SALES_DECKS_PRESENTATIONS)s,
-            %(MSA_PAYMENT_TERMS)s, %(DEAL_REGION)s, %(MSA_PIPELINE_STAGE)s, %(MSA_NAME)s, %(DEAL_CONTACTS)s)""",
+            %(MSA_PAYMENT_TERMS)s, %(DEAL_REGION)s, %(MSA_PIPELINE_STAGE)s, %(MSA_NAME)s, %(MSA_DETAILS)s,
+            %(PRIMARY_ASSOCIATED_COMPANY_ID)s, %(EMEA_CONTRACTING_ENTITY)s, %(COMPANY_PASSED_TESTER)s,
+            %(DEAL_CONTACTS)s)""",
                               raw_deals)
         # upsert from temp table to main table
         print("Upserting data into main table")
@@ -304,6 +316,10 @@ def sync_deals(event):
                 target.DEAL_REGION = source.DEAL_REGION,
                 target.MSA_PIPELINE_STAGE = source.MSA_PIPELINE_STAGE,
                 target.MSA_NAME = source.MSA_NAME,
+                target.MSA_DETAILS = source.MSA_DETAILS,
+                target.PRIMARY_ASSOCIATED_COMPANY_ID = source.PRIMARY_ASSOCIATED_COMPANY_ID,
+                target.EMEA_CONTRACTING_ENTITY = source.EMEA_CONTRACTING_ENTITY,
+                target.COMPANY_PASSED_TESTER = source.COMPANY_PASSED_TESTER,
                 target.DEAL_CONTACTS = source.DEAL_CONTACTS
             WHEN NOT MATCHED THEN
                 INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME,
@@ -314,7 +330,8 @@ def sync_deals(event):
                 DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL,
                 SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING,
                 DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS,
-                MSA_PAYMENT_TERMS, DEAL_REGION, MSA_PIPELINE_STAGE, MSA_NAME, DEAL_CONTACTS)
+                MSA_PAYMENT_TERMS, DEAL_REGION, MSA_PIPELINE_STAGE, MSA_NAME, MSA_DETAILS,
+                PRIMARY_ASSOCIATED_COMPANY_ID, EMEA_CONTRACTING_ENTITY, COMPANY_PASSED_TESTER, DEAL_CONTACTS)
                 VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID,
                 source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME,
                 source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID,
@@ -327,7 +344,9 @@ def sync_deals(event):
                 source.BOOK_LEADS_2026, source.BOOK_2026_EMAIL, source.OFFERING,
                 source.DESCRIPTION, source.TECH_INVOLVED, source.PRIMARY_ENTITY, source.PROJECT_END_DATE,
                 source.SALES_DECKS_PRESENTATIONS, source.MSA_PAYMENT_TERMS, source.DEAL_REGION,
-                source.MSA_PIPELINE_STAGE, source.MSA_NAME, source.DEAL_CONTACTS)
+                source.MSA_PIPELINE_STAGE, source.MSA_NAME, source.MSA_DETAILS,
+                source.PRIMARY_ASSOCIATED_COMPANY_ID, source.EMEA_CONTRACTING_ENTITY,
+                source.COMPANY_PASSED_TESTER, source.DEAL_CONTACTS)
         """
                           )
         print(f"Done - Deals Updated/Created Since: {sync_from}")

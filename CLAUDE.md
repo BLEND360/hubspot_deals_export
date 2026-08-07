@@ -55,8 +55,9 @@ hubspot_deals_export/
 - `HUBSPOT_ENTITY_SYNC_INFO` (sync status tracking)
 
 ## HubSpot Deal Fields Synced
-Key fields synced from HubSpot to `HUBSPOT_DEALS`: DEAL_NAME, DEAL_STAGE_NAME, COMPANY_NAME, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_AMOUNT, WORK_AHEAD, OFFERING, DESCRIPTION (deal description), TECH_INVOLVED (tech stack), CURRENCY, PIPELINE_ID, REVENUE_TYPE, NS_PROJECT_ID, DEAL_TYPE, BOOK_LEADS_2026, BOOK_2026_EMAIL, SALES_DECKS_PRESENTATIONS, MSA_PIPELINE_STAGE, MSA_NAME, and more.
-- HubSpot API property names: `description` → DESCRIPTION, `tech_involved` → TECH_INVOLVED, `offering` → OFFERING, `sales_decks__presentations` → SALES_DECKS_PRESENTATIONS, `msa_name` on the associated MSA custom object → MSA_NAME
+Key fields synced from HubSpot to `HUBSPOT_DEALS`: DEAL_NAME, DEAL_STAGE_NAME, COMPANY_NAME, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_AMOUNT, WORK_AHEAD, OFFERING, DESCRIPTION (deal description), TECH_INVOLVED (tech stack), CURRENCY, PIPELINE_ID, REVENUE_TYPE, NS_PROJECT_ID, DEAL_TYPE, BOOK_LEADS_2026, BOOK_2026_EMAIL, SALES_DECKS_PRESENTATIONS, MSA_PIPELINE_STAGE, MSA_NAME, MSA_DETAILS, PRIMARY_ASSOCIATED_COMPANY_ID, EMEA_CONTRACTING_ENTITY, COMPANY_PASSED_TESTER, and more.
+- HubSpot API property names: `description` → DESCRIPTION, `tech_involved` → TECH_INVOLVED, `offering` → OFFERING, `sales_decks__presentations` → SALES_DECKS_PRESENTATIONS, `primary_associated_company_id` → PRIMARY_ASSOCIATED_COMPANY_ID, `emea_contracting_entity` → EMEA_CONTRACTING_ENTITY, `company_passed_tester` → COMPANY_PASSED_TESTER, `msa_name` on the associated MSA custom object → MSA_NAME
+- The deal property list requested from HubSpot is a **single shared constant** — `deal_properties` in `utils/hubspot_api.py`. It feeds the bulk search (`fetch_updated_or_created_deals`) and the single-deal GET (`get_deal`), so a new deal property only needs registering there. A property name that doesn't exist in the portal makes HubSpot 400 the whole request, breaking every sync path — verify names via `GET /crm/v3/properties/0-3` before adding.
 
 ### SALES_DECKS_PRESENTATIONS (file resolution)
 - The `sales_decks__presentations` deal property holds semicolon-separated HubSpot **file IDs** (e.g. `"217029166877;217029169823"`).
@@ -71,9 +72,17 @@ Key fields synced from HubSpot to `HUBSPOT_DEALS`: DEAL_NAME, DEAL_STAGE_NAME, C
 - `MSA_NAME` is not a deal property. It comes from the MSA custom object associated to the deal.
 - MSA custom object type defaults to `2-65998916` via `MSA_OBJECT_TYPE_ID` in `utils/config.py`.
 - Association lookup uses HubSpot batch associations: `POST /crm/v3/associations/0-3/{MSA_OBJECT_TYPE_ID}/batch/read`.
-- MSA record lookup uses HubSpot custom object batch read: `POST /crm/v3/objects/{MSA_OBJECT_TYPE_ID}/batch/read` with property `msa_name`.
+- MSA record lookup uses HubSpot custom object batch read: `POST /crm/v3/objects/{MSA_OBJECT_TYPE_ID}/batch/read` with the `msa_properties` list (see MSA_DETAILS below).
 - Multiple associated MSA names are stored as a semicolon-separated string in `HUBSPOT_DEALS.MSA_NAME`.
 - `MSA_NAME` is wired into all deal write paths: `bulk_events_new.py`, `bulk_events.py`, and `handle_deal.py`.
+
+### MSA_DETAILS (full MSA contract terms)
+- `MSA_DETAILS` carries the MSA contract terms the Pricing App / SOW Studio needs, stored as a **JSON string** (VARCHAR, same convention as DEAL_CONTACTS / SALES_DECKS_PRESENTATIONS) — one object per associated MSA, so per-MSA grouping survives when a deal has several MSAs. `NULL` when the deal has no associated MSA.
+- Properties fetched are the `msa_properties` list in `utils/hubspot_api.py`: `msa_name`, `liability_cap`, `non_compete_details`, `non_solicitation_details`, `msa_notes`, `price_increase_restriction_details`, `rebate_or_volume_discount_details`, `subcontracting_details`, `msa_term`, `resource_location_restriction_details`, `primary_associated_company`, `msa_effective_date`, `termination_terms_summary`, `convenience_notice_period_days`. Each record also carries the MSA object `id`.
+- Shape: `[{"id": "12345", "msa_name": "...", "liability_cap": "...", "msa_effective_date": "2025-01-01", ...}]`. Values are written through verbatim as HubSpot returns them (strings); query with `PARSE_JSON(MSA_DETAILS)[0]:liability_cap::string`.
+- `MSA_DETAILS` and `MSA_NAME` come from the **same single batch fetch** — `get_msas_by_ids_batch` returns all properties and `build_msa_details_json(msa_ids, msa_details_by_id)` builds the column value. No extra API calls.
+- Wired into all three write paths. In `handle_deal.py` the fetch is `get_deal_msa_info(deal_id)`, which returns a `(msa_name, msa_details)` tuple.
+- `primary_associated_company` (on the MSA) and `PRIMARY_ASSOCIATED_COMPANY_ID` (on the deal) are stored **raw**, not resolved to company names — join `HUBSPOT_COMPANIES` if a name is needed.
 
 ## Build & Deploy
 ```bash

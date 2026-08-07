@@ -9,7 +9,8 @@ from .utils.config import SF_COMPANIES_TABLE, SF_DEAL_OWNERS_TABLE, SF_DEAL_COLL
     SF_LINE_ITEMS_TABLE
 from .utils.hubspot_api import get_deal, get_company_details, get_deal_to_company_association, get_owner_details, \
     get_deal_pipeline_stages, get_line_items_by_ids, get_deal_to_contact_association, get_contact_details, \
-    get_file_name_by_id, get_msa_stage_labels, get_associated_msas_of_deals, get_msas_by_ids_batch
+    get_file_name_by_id, get_msa_stage_labels, get_associated_msas_of_deals, get_msas_by_ids_batch, \
+    build_msa_details_json
 
 
 def handle_company_details(deal_id, sf_cursor):
@@ -56,7 +57,8 @@ def handle_contact_details(deal_id):
     return contacts
 
 
-def get_deal_msa_name(deal_id):
+def get_deal_msa_info(deal_id):
+    """Return (MSA_NAME, MSA_DETAILS) for a deal from a single MSA batch fetch."""
     deals_to_associated_msa_ids = get_associated_msas_of_deals([deal_id])
     msa_ids = deals_to_associated_msa_ids.get(str(deal_id), [])
     msa_details_by_id = get_msas_by_ids_batch(msa_ids)
@@ -65,7 +67,8 @@ def get_deal_msa_name(deal_id):
         for msa_id in msa_ids
         if msa_id in msa_details_by_id and msa_details_by_id[msa_id]["msa_name"]
     ]
-    return "; ".join(msa_names) if msa_names else None
+    return ("; ".join(msa_names) if msa_names else None,
+            build_msa_details_json(msa_ids, msa_details_by_id))
 
 
 def get_deleted_line_item_ids(updated_line_item_ids, existing_line_items):
@@ -295,7 +298,7 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
     # msa_pipeline_stage holds a stage ID from the MSA custom object; resolve it to its label
     msa_stage_id = deal_properties.get('msa_pipeline_stage')
     msa_stage_name = get_msa_stage_labels().get(msa_stage_id, msa_stage_id) if msa_stage_id else None
-    msa_name = get_deal_msa_name(deal_id)
+    msa_name, msa_details = get_deal_msa_info(deal_id)
 
     curr_time = datetime.now(pytz.timezone('America/New_York'))
 
@@ -354,6 +357,10 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "DEAL_REGION": deal_properties.get('deal_region', '').replace("'", "''") if deal_properties.get('deal_region') else None,
         "MSA_PIPELINE_STAGE": msa_stage_name.replace("'", "''") if msa_stage_name else None,
         "MSA_NAME": msa_name.replace("'", "''") if msa_name else None,
+        "MSA_DETAILS": msa_details.replace("'", "''") if msa_details else None,
+        "PRIMARY_ASSOCIATED_COMPANY_ID": deal_properties.get('primary_associated_company_id', '').replace("'", "''") if deal_properties.get('primary_associated_company_id') else None,
+        "EMEA_CONTRACTING_ENTITY": deal_properties.get('emea_contracting_entity', '').replace("'", "''") if deal_properties.get('emea_contracting_entity') else None,
+        "COMPANY_PASSED_TESTER": deal_properties.get('company_passed_tester', '').replace("'", "''") if deal_properties.get('company_passed_tester') else None,
         "DEAL_CONTACTS": json.dumps(contact_details) if contact_details else None
     }
     deal_data = {key: none_to_null(value) for key, value in deal_data_raw.items()}
@@ -408,6 +415,10 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
                         {deal_data['DEAL_REGION']} as DEAL_REGION,
                         {deal_data['MSA_PIPELINE_STAGE']} as MSA_PIPELINE_STAGE,
                         {deal_data['MSA_NAME']} as MSA_NAME,
+                        {deal_data['MSA_DETAILS']} as MSA_DETAILS,
+                        {deal_data['PRIMARY_ASSOCIATED_COMPANY_ID']} as PRIMARY_ASSOCIATED_COMPANY_ID,
+                        {deal_data['EMEA_CONTRACTING_ENTITY']} as EMEA_CONTRACTING_ENTITY,
+                        {deal_data['COMPANY_PASSED_TESTER']} as COMPANY_PASSED_TESTER,
                         {deal_data['DEAL_CONTACTS']} as DEAL_CONTACTS
                     ) AS source
             ON (target.DEAL_ID = source.DEAL_ID)
@@ -459,10 +470,14 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
                     target.DEAL_REGION = source.DEAL_REGION,
                     target.MSA_PIPELINE_STAGE = source.MSA_PIPELINE_STAGE,
                     target.MSA_NAME = source.MSA_NAME,
+                    target.MSA_DETAILS = source.MSA_DETAILS,
+                    target.PRIMARY_ASSOCIATED_COMPANY_ID = source.PRIMARY_ASSOCIATED_COMPANY_ID,
+                    target.EMEA_CONTRACTING_ENTITY = source.EMEA_CONTRACTING_ENTITY,
+                    target.COMPANY_PASSED_TESTER = source.COMPANY_PASSED_TESTER,
                     target.DEAL_CONTACTS = source.DEAL_CONTACTS
             WHEN NOT MATCHED THEN
-                INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME, DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS, PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN, NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING, DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS, MSA_PAYMENT_TERMS, DEAL_REGION, MSA_PIPELINE_STAGE, MSA_NAME, DEAL_CONTACTS)
-                VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID, source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME, source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID, source.PROJECT_START_DATE, source.PROJECT_CLOSE_DATE, source.ENGAGEMENT_TYPE, source.DURATION_IN_MONTHS, source.DEAL_COLLABORATORS, source.DEAL_CREATED_ON, source.DEAL_UPDATED_ON, source.IS_ARCHIVED, source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE, source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON, source.DELIVERY_LEAD_ID, source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID, source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE, source.CURRENCY, source.BOOK_LEADS_2026, source.BOOK_2026_EMAIL, source.OFFERING, source.DESCRIPTION, source.TECH_INVOLVED, source.PRIMARY_ENTITY, source.PROJECT_END_DATE, source.SALES_DECKS_PRESENTATIONS, source.MSA_PAYMENT_TERMS, source.DEAL_REGION, source.MSA_PIPELINE_STAGE, source.MSA_NAME, source.DEAL_CONTACTS);
+                INSERT (DEAL_ID, DEAL_NAME, DEAL_OWNER, DEAL_OWNER_ID, DEAL_OWNER_EMAIL, DEAL_OWNER_NAME, DEAL_STAGE_ID, DEAL_STAGE_NAME, COMPANY_ID, COMPANY_NAME, DEAL_TO_COMPANY_ASSOCIATIONS, PIPELINE_ID, PROJECT_START_DATE, PROJECT_CLOSE_DATE, ENGAGEMENT_TYPE, DURATION_IN_MONTHS, DEAL_COLLABORATORS, DEAL_CREATED_ON, DEAL_UPDATED_ON, IS_ARCHIVED, COMPANY_DOMAIN, NS_PROJECT_ID, DEAL_AMOUNT_IN_COMPANY_CURRENCY, DEAL_TYPE, SPECIAL_FIELDS_UPDATED_ON, WORK_AHEAD, LAST_REFRESHED_ON, DELIVERY_LEAD_ID, DELIVERY_LEAD_EMAIL, DELIVERY_LEAD_NAME, SOLUTION_LEAD_ID, SOLUTION_LEAD_EMAIL, SOLUTION_LEAD_NAME, REVENUE_TYPE, CURRENCY, BOOK_LEADS_2026, BOOK_2026_EMAIL, OFFERING, DESCRIPTION, TECH_INVOLVED, PRIMARY_ENTITY, PROJECT_END_DATE, SALES_DECKS_PRESENTATIONS, MSA_PAYMENT_TERMS, DEAL_REGION, MSA_PIPELINE_STAGE, MSA_NAME, MSA_DETAILS, PRIMARY_ASSOCIATED_COMPANY_ID, EMEA_CONTRACTING_ENTITY, COMPANY_PASSED_TESTER, DEAL_CONTACTS)
+                VALUES (source.DEAL_ID, source.DEAL_NAME, source.DEAL_OWNER, source.DEAL_OWNER_ID, source.DEAL_OWNER_EMAIL, source.DEAL_OWNER_NAME, source.DEAL_STAGE_ID, source.DEAL_STAGE_NAME, source.COMPANY_ID, source.COMPANY_NAME, source.DEAL_TO_COMPANY_ASSOCIATIONS, source.PIPELINE_ID, source.PROJECT_START_DATE, source.PROJECT_CLOSE_DATE, source.ENGAGEMENT_TYPE, source.DURATION_IN_MONTHS, source.DEAL_COLLABORATORS, source.DEAL_CREATED_ON, source.DEAL_UPDATED_ON, source.IS_ARCHIVED, source.COMPANY_DOMAIN, source.NS_PROJECT_ID, source.DEAL_AMOUNT_IN_COMPANY_CURRENCY, source.DEAL_TYPE, source.SPECIAL_FIELDS_UPDATED_ON, source.WORK_AHEAD, source.LAST_REFRESHED_ON, source.DELIVERY_LEAD_ID, source.DELIVERY_LEAD_EMAIL, source.DELIVERY_LEAD_NAME, source.SOLUTION_LEAD_ID, source.SOLUTION_LEAD_EMAIL, source.SOLUTION_LEAD_NAME, source.REVENUE_TYPE, source.CURRENCY, source.BOOK_LEADS_2026, source.BOOK_2026_EMAIL, source.OFFERING, source.DESCRIPTION, source.TECH_INVOLVED, source.PRIMARY_ENTITY, source.PROJECT_END_DATE, source.SALES_DECKS_PRESENTATIONS, source.MSA_PAYMENT_TERMS, source.DEAL_REGION, source.MSA_PIPELINE_STAGE, source.MSA_NAME, source.MSA_DETAILS, source.PRIMARY_ASSOCIATED_COMPANY_ID, source.EMEA_CONTRACTING_ENTITY, source.COMPANY_PASSED_TESTER, source.DEAL_CONTACTS);
         """
 
     sf_cursor.execute(merge_sql)

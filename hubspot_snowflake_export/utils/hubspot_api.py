@@ -51,7 +51,29 @@ deal_properties = [
     "sales_decks__presentations",
     "msa_payment_terms",
     "deal_region",
-    "msa_pipeline_stage"
+    "msa_pipeline_stage",
+    "primary_associated_company_id",
+    "emea_contracting_entity",
+    "company_passed_tester"
+]
+
+# Properties fetched from the MSA custom object (MSA_OBJECT_TYPE_ID).
+# msa_name feeds HUBSPOT_DEALS.MSA_NAME; the whole set is stored as JSON in HUBSPOT_DEALS.MSA_DETAILS
+msa_properties = [
+    "msa_name",
+    "liability_cap",
+    "non_compete_details",
+    "non_solicitation_details",
+    "msa_notes",
+    "price_increase_restriction_details",
+    "rebate_or_volume_discount_details",
+    "subcontracting_details",
+    "msa_term",
+    "resource_location_restriction_details",
+    "primary_associated_company",
+    "msa_effective_date",
+    "termination_terms_summary",
+    "convenience_notice_period_days"
 ]
 
 def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z", use_backup=False,
@@ -788,17 +810,25 @@ def get_msas_by_ids_batch(msa_ids):
         payload = json.dumps({
             "inputs": [{"id": msa_id} for msa_id in msa_ids_],
             "limit": 100,
-            "properties": [
-                "msa_name"
-            ]
+            "properties": msa_properties
         })
         data = call_api("POST", url, payload=payload)
         for msa in data["results"]:
+            props = msa.get("properties") or {}
             msa_details[msa["id"]] = {
                 "id": msa["id"],
-                "msa_name": msa["properties"].get("msa_name")
+                **{prop: props.get(prop) for prop in msa_properties}
             }
     return msa_details
+
+
+def build_msa_details_json(msa_ids, msa_details_by_id):
+    """
+    Build the HUBSPOT_DEALS.MSA_DETAILS value: a JSON array of the full MSA records
+    associated to a deal, or None when the deal has no associated MSA.
+    """
+    records = [msa_details_by_id[msa_id] for msa_id in msa_ids if msa_id in msa_details_by_id]
+    return json.dumps(records) if records else None
 
 
 def get_line_items_by_ids_batch(line_item_ids):
