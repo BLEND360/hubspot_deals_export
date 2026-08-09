@@ -383,8 +383,10 @@ def sync_deals(event):
         sf_cursor.executemany("""INSERT INTO LINE_ITEMS_TEMP (LINE_ITEM_ID, NAME, PRICE, QUANTITY, AMOUNT, CREATED_ON, UPDATED_ON, DEAL_ID, CURRENCY)
             VALUES (%(id)s, %(name)s, %(price)s, %(quantity)s, %(amount)s, %(created_at)s, %(updated_at)s, %(deal_id)s, %(currency)s)""",
                               line_items)
-        sf_cursor.execute(f"DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE DEAL_ID IN (%(line_items_deals)s)",
-                          {'line_items_deals': line_items_deals})
+        # an empty list renders as `IN ()`, which Snowflake rejects as a syntax error
+        if line_items_deals:
+            sf_cursor.execute(f"DELETE FROM {SF_LINE_ITEMS_TABLE} WHERE DEAL_ID IN (%(line_items_deals)s)",
+                              {'line_items_deals': line_items_deals})
 
         sf_cursor.execute(f"""
             MERGE INTO {SF_LINE_ITEMS_TABLE} AS target
