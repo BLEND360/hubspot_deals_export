@@ -54,7 +54,8 @@ deal_properties = [
     "msa_pipeline_stage",
     "primary_associated_company_id",
     "emea_contracting_entity",
-    "company_passed_tester"
+    "company_passed_tester",
+    "sow_end_date"
 ]
 
 # Properties fetched from the MSA custom object (MSA_OBJECT_TYPE_ID).
