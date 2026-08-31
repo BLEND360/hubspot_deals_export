@@ -12,8 +12,8 @@ from .utils.hubspot_api import fetch_updated_or_created_deals, get_all_stages, g
     get_associated_companies_of_deals, \
     get_associated_line_items_of_deals, get_line_items_by_ids_batch, get_companies_by_ids_batch, \
     get_owners_by_ids_users_search, get_associated_contacts_of_deals, get_contacts_by_ids_batch, \
-    get_files_by_ids_search, get_msa_stage_labels, get_associated_msas_of_deals, get_msas_by_ids_batch, \
-    build_msa_details_json
+    get_files_by_ids_search, get_associated_msas_for_deals, get_msas_by_ids_batch, \
+    build_msa_details_json, select_msa_for_deal
 from .utils.snowflake_db import close_sf_connection, create_sf_connection
 
 def get_list_of_owner_ids(deals):
@@ -97,7 +97,7 @@ def sync_deals(event):
         for deal_id in deal_ids
     }
     print("done contact details")
-    deals_to_associated_msa_ids = get_associated_msas_of_deals(deal_ids)
+    deals_to_associated_msa_ids = get_associated_msas_for_deals(deal_ids, deals_to_associated_company_ids)
     all_msa_ids = list(set(msa_id for msa_ids in deals_to_associated_msa_ids.values() for msa_id in msa_ids))
     msa_details_by_id = get_msas_by_ids_batch(all_msa_ids)
     deals_with_msa_names = {
@@ -114,7 +114,6 @@ def sync_deals(event):
     }
     print("done msa details")
     pipeline_stages = get_all_stages()
-    msa_stage_labels = get_msa_stage_labels()
     print("done pipeline stages")
     # owner_details = get_all_owners()
     owner_details = get_owners_by_ids_users_search(owner_ids=list_of_owner_ids)
@@ -155,8 +154,11 @@ def sync_deals(event):
             # handle_deal_upsert(deal, sf_cursor, deals_with_companies, deals_with_line_items, owner_details, pipeline_stages)
             deal_properties = deal['properties']
             stage_name = pipeline_stages.get(deal_properties["pipeline"], {}).get(deal_properties['dealstage'])
-            msa_stage_id = deal_properties.get('msa_pipeline_stage')
-            msa_stage_name = msa_stage_labels.get(msa_stage_id, msa_stage_id) if msa_stage_id else None
+            selected_msa = select_msa_for_deal(
+                deals_to_associated_msa_ids.get(deal_id, []),
+                msa_details_by_id,
+                deal_properties.get('primary_associated_company_id'),
+            ) or {}
 
             curr_time = datetime.now(pytz.timezone('America/New_York'))
 
@@ -223,9 +225,9 @@ def sync_deals(event):
                 "PROJECT_END_DATE": deal_properties.get('est__project_end_date__cloned_'),
                 "SOW_END_DATE": deal_properties.get('sow_end_date'),
                 "SALES_DECKS_PRESENTATIONS": get_sales_decks_names(deal_properties.get('sales_decks__presentations'), sales_deck_file_names_by_id),
-                "MSA_PAYMENT_TERMS": deal_properties.get('msa_payment_terms'),
+                "MSA_PAYMENT_TERMS": selected_msa.get('payment_terms'),
                 "DEAL_REGION": deal_properties.get('deal_region'),
-                "MSA_PIPELINE_STAGE": msa_stage_name,
+                "MSA_PIPELINE_STAGE": selected_msa.get('msa_pipeline_stage'),
                 "MSA_NAME": "; ".join(deal_msa_names) if deal_msa_names else None,
                 "MSA_DETAILS": deal_msa_details,
                 "PRIMARY_ASSOCIATED_COMPANY_ID": deal_properties.get('primary_associated_company_id'),

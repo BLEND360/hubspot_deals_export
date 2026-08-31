@@ -9,8 +9,8 @@ from .utils.config import SF_COMPANIES_TABLE, SF_DEAL_OWNERS_TABLE, SF_DEAL_COLL
     SF_LINE_ITEMS_TABLE
 from .utils.hubspot_api import get_deal, get_company_details, get_deal_to_company_association, get_owner_details, \
     get_deal_pipeline_stages, get_line_items_by_ids, get_deal_to_contact_association, get_contact_details, \
-    get_file_name_by_id, get_msa_stage_labels, get_associated_msas_of_deals, get_msas_by_ids_batch, \
-    build_msa_details_json
+    get_file_name_by_id, get_associated_msas_for_deals, get_msas_by_ids_batch, \
+    build_msa_details_json, select_msa_for_deal
 
 
 def handle_company_details(deal_id, sf_cursor):
@@ -57,9 +57,11 @@ def handle_contact_details(deal_id):
     return contacts
 
 
-def get_deal_msa_info(deal_id):
-    """Return (MSA_NAME, MSA_DETAILS) for a deal from a single MSA batch fetch."""
-    deals_to_associated_msa_ids = get_associated_msas_of_deals([deal_id])
+def get_deal_msa_info(deal_id, company_id=None):
+    """Return MSA names, grouped details, and the selected MSA for a deal."""
+    deals_to_associated_msa_ids = get_associated_msas_for_deals(
+        [deal_id], {str(deal_id): company_id} if company_id else None
+    )
     msa_ids = deals_to_associated_msa_ids.get(str(deal_id), [])
     msa_details_by_id = get_msas_by_ids_batch(msa_ids)
     msa_names = [
@@ -67,8 +69,11 @@ def get_deal_msa_info(deal_id):
         for msa_id in msa_ids
         if msa_id in msa_details_by_id and msa_details_by_id[msa_id]["msa_name"]
     ]
-    return ("; ".join(msa_names) if msa_names else None,
-            build_msa_details_json(msa_ids, msa_details_by_id))
+    return (
+        "; ".join(msa_names) if msa_names else None,
+        build_msa_details_json(msa_ids, msa_details_by_id),
+        select_msa_for_deal(msa_ids, msa_details_by_id, company_id),
+    )
 
 
 def get_deleted_line_item_ids(updated_line_item_ids, existing_line_items):
@@ -295,10 +300,10 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         company_details['domain'].split(".")[:-1]).title() if company_details['domain'] else None
     stage_name = next((stage['label'] for stage in stage_details if stage['id'] == deal_properties['dealstage']), None)
 
-    # msa_pipeline_stage holds a stage ID from the MSA custom object; resolve it to its label
-    msa_stage_id = deal_properties.get('msa_pipeline_stage')
-    msa_stage_name = get_msa_stage_labels().get(msa_stage_id, msa_stage_id) if msa_stage_id else None
-    msa_name, msa_details = get_deal_msa_info(deal_id)
+    msa_name, msa_details, selected_msa = get_deal_msa_info(
+        deal_id, deal_properties.get('primary_associated_company_id')
+    )
+    selected_msa = selected_msa or {}
 
     curr_time = datetime.now(pytz.timezone('America/New_York'))
 
@@ -354,9 +359,9 @@ def upsert_deal(sf_cursor, deal_id, deals_request, deal_properties, owner_detail
         "PROJECT_END_DATE": deal_properties.get('est__project_end_date__cloned_'),
         "SOW_END_DATE": deal_properties.get('sow_end_date'),
         "SALES_DECKS_PRESENTATIONS": sales_decks_presentations.replace("'", "''") if sales_decks_presentations else None,
-        "MSA_PAYMENT_TERMS": deal_properties.get('msa_payment_terms', '').replace("'", "''") if deal_properties.get('msa_payment_terms') else None,
+        "MSA_PAYMENT_TERMS": selected_msa.get('payment_terms', '').replace("'", "''") if selected_msa.get('payment_terms') else None,
         "DEAL_REGION": deal_properties.get('deal_region', '').replace("'", "''") if deal_properties.get('deal_region') else None,
-        "MSA_PIPELINE_STAGE": msa_stage_name.replace("'", "''") if msa_stage_name else None,
+        "MSA_PIPELINE_STAGE": selected_msa.get('msa_pipeline_stage', '').replace("'", "''") if selected_msa.get('msa_pipeline_stage') else None,
         "MSA_NAME": msa_name.replace("'", "''") if msa_name else None,
         "MSA_DETAILS": msa_details.replace("'", "''") if msa_details else None,
         "PRIMARY_ASSOCIATED_COMPANY_ID": deal_properties.get('primary_associated_company_id', '').replace("'", "''") if deal_properties.get('primary_associated_company_id') else None,

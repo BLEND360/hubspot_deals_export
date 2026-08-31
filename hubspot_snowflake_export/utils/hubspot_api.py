@@ -49,9 +49,7 @@ deal_properties = [
     "primary_entity",
     "est__project_end_date__cloned_",
     "sales_decks__presentations",
-    "msa_payment_terms",
     "deal_region",
-    "msa_pipeline_stage",
     "primary_associated_company_id",
     "emea_contracting_entity",
     "company_passed_tester",
@@ -62,6 +60,8 @@ deal_properties = [
 # msa_name feeds HUBSPOT_DEALS.MSA_NAME; the whole set is stored as JSON in HUBSPOT_DEALS.MSA_DETAILS
 msa_properties = [
     "msa_name",
+    "payment_terms",
+    "msa_pipeline_stage",
     "liability_cap",
     "non_compete_details",
     "non_solicitation_details",
@@ -74,7 +74,9 @@ msa_properties = [
     "primary_associated_company",
     "msa_effective_date",
     "termination_terms_summary",
-    "convenience_notice_period_days"
+    "convenience_notice_period_days",
+    "createdate",
+    "hs_lastmodifieddate",
 ]
 
 def fetch_updated_or_created_deals(start_date_time, sync_older=False, created_after="2024-01-01T00:00:00Z", use_backup=False,
@@ -633,6 +635,35 @@ def get_associated_msas_of_deals(deal_ids):
     return deals_to_associated_msa_ids
 
 
+def get_associated_msas_of_companies(company_ids):
+    """Return MSA associations keyed by company id."""
+    url = f"{BASE_URL}/crm/v3/associations/0-2/{MSA_OBJECT_TYPE_ID}/batch/read"
+    result = {}
+    unique_ids = list(dict.fromkeys(str(value) for value in company_ids if value))
+    for offset in range(0, len(unique_ids), 1000):
+        payload = {"inputs": [{"id": value} for value in unique_ids[offset:offset + 1000]]}
+        data = call_api("POST", url, headers=auth_headers, payload=json.dumps(payload))
+        result.update({
+            association["from"]["id"]: [item["id"] for item in association["to"]]
+            for association in data.get("results", [])
+        })
+    return result
+
+
+def get_associated_msas_for_deals(deal_ids, company_ids_by_deal=None):
+    """Combine direct Deal→MSA and primary Company→MSA associations."""
+    direct = get_associated_msas_of_deals(deal_ids)
+    company_ids_by_deal = company_ids_by_deal or {}
+    by_company = get_associated_msas_of_companies(company_ids_by_deal.values())
+    return {
+        str(deal_id): list(dict.fromkeys(
+            direct.get(str(deal_id), [])
+            + by_company.get(str(company_ids_by_deal.get(str(deal_id)) or ""), [])
+        ))
+        for deal_id in deal_ids
+    }
+
+
 def get_associated_line_items_of_deals(deal_ids):
     url = f"{BASE_URL}/crm/v3/associations/deal/line_item/batch/read"
     deals_as_batch_of_1000 = [deal_ids[i:i + 1000] for i in range(0, len(deal_ids), 1000)]
@@ -803,9 +834,21 @@ def get_contacts_by_ids_batch(contact_ids):
     return contact_details
 
 
+def _normalize_msa_record(msa, stage_labels):
+    props = msa.get("properties") or {}
+    stage = props.get("msa_pipeline_stage")
+    return {
+        "id": msa["id"],
+        **{prop: props.get(prop) for prop in msa_properties},
+        "msa_pipeline_stage_id": stage,
+        "msa_pipeline_stage": stage_labels.get(stage, stage),
+    }
+
+
 def get_msas_by_ids_batch(msa_ids):
     url = f"{BASE_URL}/crm/v3/objects/{MSA_OBJECT_TYPE_ID}/batch/read"
     msa_details = {}
+    stage_labels = get_msa_stage_labels()
     msa_ids_batch_of_100 = [msa_ids[i:i + 100] for i in range(0, len(msa_ids), 100)]
     for msa_ids_ in msa_ids_batch_of_100:
         payload = json.dumps({
@@ -815,11 +858,7 @@ def get_msas_by_ids_batch(msa_ids):
         })
         data = call_api("POST", url, payload=payload)
         for msa in data["results"]:
-            props = msa.get("properties") or {}
-            msa_details[msa["id"]] = {
-                "id": msa["id"],
-                **{prop: props.get(prop) for prop in msa_properties}
-            }
+            msa_details[msa["id"]] = _normalize_msa_record(msa, stage_labels)
     return msa_details
 
 
@@ -830,6 +869,29 @@ def build_msa_details_json(msa_ids, msa_details_by_id):
     """
     records = [msa_details_by_id[msa_id] for msa_id in msa_ids if msa_id in msa_details_by_id]
     return json.dumps(records) if records else None
+
+
+def select_msa_for_deal(msa_ids, msa_details_by_id, company_id=None):
+    records = [msa_details_by_id[msa_id] for msa_id in msa_ids if msa_id in msa_details_by_id]
+    if company_id and any(record.get("primary_associated_company") for record in records):
+        records = [
+            record for record in records
+            if str(record.get("primary_associated_company")) == str(company_id)
+        ]
+    if not records:
+        return None
+
+    active = [
+        record for record in records
+        if str(record.get("msa_pipeline_stage") or "").strip().lower() == "active"
+    ]
+    candidates = active or records
+    return max(candidates, key=lambda record: (
+        record.get("msa_effective_date") or "" if active else record.get("hs_lastmodifieddate") or "",
+        record.get("hs_lastmodifieddate") or "",
+        record.get("createdate") or "",
+        str(record.get("id") or ""),
+    ))
 
 
 def get_line_items_by_ids_batch(line_item_ids):

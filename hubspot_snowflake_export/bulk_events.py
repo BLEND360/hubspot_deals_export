@@ -8,7 +8,7 @@ from .utils.config import SF_DEALS_TABLE, SF_LINE_ITEMS_TABLE, SF_WAREHOUSE, SF_
     SF_ROLE
 from .utils.hubspot_api import fetch_updated_or_created_deals, get_all_companies, get_all_stages, get_all_owners, \
     get_all_line_items, get_associated_contacts_of_deals, get_contacts_by_ids_batch, get_files_by_ids_search, \
-    get_associated_msas_of_deals, get_msas_by_ids_batch, build_msa_details_json
+    get_associated_msas_for_deals, get_msas_by_ids_batch, build_msa_details_json, select_msa_for_deal
 from .utils.snowflake_db import close_sf_connection, create_sf_connection
 
 
@@ -84,7 +84,12 @@ def sync_deals(event):
         for deal_id in deal_ids_for_contacts
     }
     print("done contact details")
-    deals_to_associated_msa_ids = get_associated_msas_of_deals(deal_ids_for_contacts)
+    company_ids_by_deal = {
+        deal_id: details.get("id")
+        for deal_id, details in deals_with_companies.items()
+        if details.get("id")
+    }
+    deals_to_associated_msa_ids = get_associated_msas_for_deals(deal_ids_for_contacts, company_ids_by_deal)
     all_msa_ids = list(set(msa_id for msa_ids in deals_to_associated_msa_ids.values() for msa_id in msa_ids))
     msa_details_by_id = get_msas_by_ids_batch(all_msa_ids)
     deals_with_msa_names = {
@@ -143,6 +148,11 @@ def sync_deals(event):
             deal_contacts = deals_with_contacts.get(deal_id, [])
             deal_msa_names = deals_with_msa_names.get(deal_id, [])
             deal_msa_details = deals_with_msa_details.get(deal_id)
+            selected_msa = select_msa_for_deal(
+                deals_to_associated_msa_ids.get(deal_id, []),
+                msa_details_by_id,
+                deal_properties.get('primary_associated_company_id'),
+            ) or {}
             deal_collaborators_str = deal_properties['hs_all_collaborator_owner_ids']
             deal_collaborators = []
             if deal_collaborators_str:
@@ -194,9 +204,9 @@ def sync_deals(event):
                 "PRIMARY_ENTITY": deal_properties.get('primary_entity'),
                 "PROJECT_END_DATE": deal_properties.get('est__project_end_date__cloned_'),
                 "SALES_DECKS_PRESENTATIONS": get_sales_decks_names(deal_properties.get('sales_decks__presentations'), sales_deck_file_names_by_id),
-                "MSA_PAYMENT_TERMS": deal_properties.get('msa_payment_terms'),
+                "MSA_PAYMENT_TERMS": selected_msa.get('payment_terms'),
                 "DEAL_REGION": deal_properties.get('deal_region'),
-                "MSA_PIPELINE_STAGE": deal_properties.get('msa_pipeline_stage'),
+                "MSA_PIPELINE_STAGE": selected_msa.get('msa_pipeline_stage'),
                 "MSA_NAME": "; ".join(deal_msa_names) if deal_msa_names else None,
                 "MSA_DETAILS": deal_msa_details,
                 "PRIMARY_ASSOCIATED_COMPANY_ID": deal_properties.get('primary_associated_company_id'),
