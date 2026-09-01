@@ -61,7 +61,7 @@ deal_properties = [
 msa_properties = [
     "msa_name",
     "payment_terms",
-    "msa_pipeline_stage",
+    "hs_pipeline_stage",
     "liability_cap",
     "non_compete_details",
     "non_solicitation_details",
@@ -471,7 +471,7 @@ def get_all_owners(use_backup=False, archived_types=["false", "true"]):
 # print(get_all_owners())
 
 
-# MSA custom object type id (holds the msa_pipeline_stage stages) — from config/env
+# MSA custom object type id (holds the hs_pipeline_stage stages) — from config/env
 _msa_stage_label_cache = None
 
 
@@ -836,7 +836,7 @@ def get_contacts_by_ids_batch(contact_ids):
 
 def _normalize_msa_record(msa, stage_labels):
     props = msa.get("properties") or {}
-    stage = props.get("msa_pipeline_stage")
+    stage = props.get("hs_pipeline_stage")
     return {
         "id": msa["id"],
         **{prop: props.get(prop) for prop in msa_properties},
